@@ -35,18 +35,20 @@ DETECTION_THRESHOLD = 0.2
 
 class Sampler:
 
-    def __init__(self, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=CAM_HEIGHT, cam_rotation=ROTATION, cam_zoom=ZOOM, host="localhost"):
+    def __init__(self, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=CAM_HEIGHT, cam_rotation=ROTATION, cam_zoom=ZOOM, cam_x_offset=10., host="localhost"):
         self.s_width = s_width
         self.s_height = s_height
         self.cam_height = cam_height
         self.cam_rotation = cam_rotation
         self.cam_zoom = cam_zoom
+        self.cam_x_offset = cam_x_offset
         self.host = host
 
     def get_waypoints(self, world_model=None, random_spawn=True):
         if world_model == None: world_model = MAP_SET[random.randrange(0,len(MAP_SET))]
 
-        env = Environment(world=world_model, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn)
+        env = Environment(world=world_model, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height,
+                             cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn)
         env.init_ego()
         image, segmentation = env.reset()
         waypoints = env.getWaypoints()
@@ -77,7 +79,8 @@ class Sampler:
     def sample(self, world_model=None, random_spawn=True):
         if world_model == None: world_model = MAP_SET[random.randrange(0,len(MAP_SET))]
 
-        env = Environment(world=world_model, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn)
+        env = Environment(world=world_model, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height,
+                         cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn, cam_x_offset=self.cam_x_offset)
         env.init_ego()
         # image, segmentation = env.reset()
         env.reset()

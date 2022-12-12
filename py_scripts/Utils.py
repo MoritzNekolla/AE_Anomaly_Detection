@@ -1,0 +1,32 @@
+import glob
+import os
+import sys
+import csv
+
+import random
+from tkinter import W
+from turtle import pos
+import numpy as np
+import math
+import time
+
+import matplotlib.pyplot as plt
+import matplotlib.image as mpllimg
+from matplotlib.pyplot import figure
+from matplotlib.lines import Line2D
+import cv2
+from PIL import Image
+
+import torch
+
+from env_carla import Environment
+
+
+# returns all absolute paths in #paths
+def get_image_paths(path):
+    path_list = []
+
+    for root, dirs, files in os.walk(os.path.abspath(path)):
+        for file in files:
+            path_list.append(os.path.join(root, file))
+    return path_list

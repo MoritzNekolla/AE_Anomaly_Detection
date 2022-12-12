@@ -45,7 +45,7 @@ import carla
 
 class Environment:
 
-    def __init__(self, world=None, host='localhost', port=2000, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=BEV_DISTANCE, cam_rotation=-90, cam_zoom=110, random_spawn=True):
+    def __init__(self, world=None, host='localhost', port=2000, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=BEV_DISTANCE, cam_rotation=-90, cam_zoom=110, random_spawn=True, cam_x_offset=10.):
         weak_self = weakref.ref(self)
         self.client = carla.Client(host, port)            #Connect to server
         self.client.set_timeout(30.0)
@@ -64,18 +64,23 @@ class Environment:
         self.bp_lib = self.world.get_blueprint_library()
         self.map = self.world.get_map()
         self.spawn_points = self.map.get_spawn_points()
+        self.goalPoint = None
         self.map_waypoints = self.map.generate_waypoints(3.0)
+        self.trajectory_list = None
 
         self.s_width = s_width
         self.s_height = s_height
         self.cam_height = cam_height
         self.cam_rotation = cam_rotation
         self.cam_zoom = cam_zoom
+        self.cam_x_offset = cam_x_offset
+
+        self.anomaly_point = None
 
         self.actor_list = []
         self.IM_WIDTH = IM_WIDTH
         self.IM_HEIGHT = IM_HEIGHT
-        weather = carla.WeatherParameters(
+        self.weather = carla.WeatherParameters(
             cloudiness=0.0,
             precipitation=0.0,
             precipitation_deposits= 0.0,
@@ -84,7 +89,7 @@ class Environment:
             wetness=0.0,
             sun_altitude_angle=70.0)
 
-        self.world.set_weather(weather)
+        self.world.set_weather(self.weather)
         self.vehicle = None # important
 
 
@@ -100,7 +105,7 @@ class Environment:
         self.ss_camera_bp.set_attribute('fov', str(self.cam_zoom))
 
         # Location for both sensors
-        self.ss_cam_location = carla.Location(10,0,self.cam_height)
+        self.ss_cam_location = carla.Location(self.cam_x_offset,0,self.cam_height)
         self.ss_cam_rotation = carla.Rotation(self.cam_rotation,0,0)
         self.ss_cam_transform = carla.Transform(self.ss_cam_location, self.ss_cam_rotation)
 
@@ -212,19 +217,39 @@ class Environment:
         anomaly_spawn = random.choice(wp_infront[3:]) # prevent spawning object on top of ego_vehicle
         location = anomaly_spawn.transform.location
         rotation = anomaly_spawn.transform.rotation
-        self.spawn_anomaly(carla.Transform(location, rotation))
+        return self.spawn_anomaly(carla.Transform(location, rotation))
 
 
 
     def spawn_anomaly(self, transform):
         ped_blueprints = self.bp_lib.filter('static.prop.*')
-        player = self.world.try_spawn_actor(random.choice(ped_blueprints),transform)
+        anomaly_object = random.choice(ped_blueprints)
+        # print(anomaly_object)
+        # print(anomaly_object.trigger_volume.extent)
+        player = self.world.try_spawn_actor(anomaly_object,transform)
         # player = self.world.try_spawn_actor(random.choice(self.bp_lib.filter('static.prop.clothcontainer')),transform)
         self.actor_list.append(player)
+        self.anomaly_point = player
+        return anomaly_object.id, transform.location
 
+    def set_goalPoint(self, max_numb):
+        if max_numb < 4: max_numb = 4
+        ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
+        self.trajectory_list = [ego_map_point]
+        for x in range(max_numb):
+            self.trajectory_list.append(self.trajectory_list[-1].next(2.)[0])
 
+        anomaly_spawn = self.trajectory_list[-1]
+        location = anomaly_spawn.transform.location
+
+        self.goalPoint = location
+
+    def getGoalPoint(self):
+        return np.array([self.goalPoint.x, self.goalPoint.y, self.goalPoint.z])
+
+    
     def change_Weather(self):
-        weather = carla.WeatherParameters(
+        self.weather = carla.WeatherParameters(
             cloudiness=0.0,
             precipitation=70.0,
             precipitation_deposits= 0.0,
@@ -234,10 +259,10 @@ class Environment:
             wetness=0.0,
             sun_altitude_angle=70.0)
 
-        self.world.set_weather(weather)
+        self.world.set_weather(self.weather)
 
     def reset_Weather(self):
-        weather = carla.WeatherParameters(
+        self.weather = carla.WeatherParameters(
             cloudiness=0.0,
             precipitation=0.0,
             precipitation_deposits= 0.0,
@@ -246,7 +271,7 @@ class Environment:
             wetness=0.0,
             sun_altitude_angle=70.0)
 
-        self.world.set_weather(weather)
+        self.world.set_weather(self.weather)
 
     def makeRandomAction(self):
         v = random.random()
@@ -256,45 +281,42 @@ class Environment:
             self.step(1)
         elif v <= 1.0:
             self.step(2)
-
-    def getEgoWaypoint(self):
-        vehicle_loc = self.vehicle.get_location()
-        wp = self.map.get_waypoint(vehicle_loc, project_to_road=True,
-                      lane_type=carla.LaneType.Driving)
-
-        return wp
     
-    def getWaypoints(self):
-        return self.map_waypoints
-    
-    def plotWaypoints(self):
-        waypoints = self.map.generate_waypoints(3.0)
-        vehicle_loc = self.vehicle.get_location()
+    # def plotWaypoints(self):
+    #     vehicle_loc = self.vehicle.get_location()
 
-        # transform = self.get_Vehicle_transform() #get vehicle location and rotation (0-360 degrees)
-        # vec = transform.rotation.get_forward_vector()
-        # transform.location.x = transform.location.x + vec.x * 4
-        # transform.location.y = transform.location.y + vec.y * 4
-        # transform.location.z = transform.location.z + vec.z * 4 
-        # self.world.debug.draw_point(transform.location, size=1., life_time=120., color=carla.Color(r=255, g=0, b=0))
-        # self.world.debug.draw_point(
-        #     transform.location, 0.1,
-        #     carla.Color(0, 0, 255),
-        #     60.0, False) 
+    #     self.world.debug.draw_string(vehicle_loc, str("Hallo"), draw_shadow=False, life_time=-1)
 
-        self.world.debug.draw_string(vehicle_loc, str("Hallo"), draw_shadow=False, life_time=-1)
+    #     for w in self.map_waypoints:
+    #         # self.world.debug.draw_string(w.transform.location, 'O', draw_shadow=False,
+    #         #                                 color=carla.Color(r=255, g=0, b=0), life_time=-1,
+    #         #                                 persistent_lines=True)
+    #         # print(w.transform.location)
+    #         self.world.debug.draw_point(w.transform.location, size=0.05, life_time=-1., color=carla.Color(r=255, g=0, b=0))
 
-        for w in waypoints:
-            # self.world.debug.draw_string(w.transform.location, 'O', draw_shadow=False,
-            #                                 color=carla.Color(r=255, g=0, b=0), life_time=-1,
-            #                                 persistent_lines=True)
-            # print(w.transform.location)
-            self.world.debug.draw_point(w.transform.location, size=0.05, life_time=-1., color=carla.Color(r=255, g=0, b=0))
-
-        wp = self.map.get_waypoint(vehicle_loc, project_to_road=True,
-                lane_type=carla.LaneType.Driving)
+    #     wp = self.map.get_waypoint(vehicle_loc, project_to_road=True,
+    #             lane_type=carla.LaneType.Driving)
         
-        self.world.debug.draw_point(wp.transform.location, size=0.05, life_time=-1., color=carla.Color(r=0, g=0, b=255))
+    #     self.world.debug.draw_point(wp.transform.location, size=0.05, life_time=-1., color=carla.Color(r=0, g=0, b=255))
+
+    def plotTrajectory(self):
+        for w in self.trajectory_list:
+            self.world.debug.draw_point(w.transform.location, size=0.2, life_time=-1., color=carla.Color(r=0, g=0, b=255))
+        # color goal point in red   
+        self.world.debug.draw_point(self.trajectory_list[-1].transform.location, size=0.3, life_time=-1., color=carla.Color(r=255, g=140, b=0))
+
+        # color anomaly
+        bounding_box_set = self.world.get_level_bbs(carla.CityObjectLabel.Dynamic) + self.world.get_level_bbs(carla.CityObjectLabel.Static)
+        best = 100000.
+        bbox = None
+        for box in bounding_box_set:
+            distance = box.location.distance(self.anomaly_point.get_transform().location)
+            if distance < best:
+                best = distance
+                bbox = box
+        # self.world.debug.draw_box(carla.BoundingBox(self.anomaly_point.get_transform().location,carla.Vector3D(3.5,3.5,4)),self.anomaly_point.get_transform().rotation, 0.3, carla.Color(255,140,0,0),-1.)
+        self.world.debug.draw_box(bbox, self.anomaly_point.get_transform().rotation, 0.2, carla.Color(0,0,0,0),-1.)
+        time.sleep(2)
 
     #Returns only the waypoints in one lane
     def single_lane(self, waypoint_list, lane):
@@ -316,6 +338,38 @@ class Environment:
         self.autoPilotOn = value
         print(f"### Autopilot: {self.autoPilotOn}")
         
+# ==============================================================================
+# -- Getter --------------------------------------------------------------------
+# ==============================================================================
+    def get_Weather(self):
+        wheather = self.world.get_weather()
+        w_dict = {
+            "cloudiness": wheather.cloudiness,
+            "precipitation": wheather.precipitation,
+            "precipitation_deposits": wheather.precipitation_deposits,
+            "wind_intensity": wheather.wind_intensity,
+            "sun_azimuth_angle": wheather.sun_azimuth_angle,
+            "sun_altitude_angle": wheather.sun_altitude_angle,
+            "fog_density": wheather.fog_density,
+            "fog_distance": wheather.fog_distance,
+            "fog_falloff": wheather.fog_falloff,
+            "wetness": wheather.wetness,
+            "scattering_intensity": wheather.scattering_intensity,
+            "mie_scattering_scale": wheather.mie_scattering_scale,
+            "rayleigh_scattering_scale": wheather.rayleigh_scattering_scale
+        }
+        return w_dict
+
+    def getEgoWaypoint(self):
+        vehicle_loc = self.vehicle.get_location()
+        wp = self.map.get_waypoint(vehicle_loc, project_to_road=True,
+                      lane_type=carla.LaneType.Driving)
+
+        return wp
+    
+    def getWaypoints(self):
+        return self.map_waypoints
+
     #get vehicle location and rotation (0-360 degrees)
     def get_Vehicle_transform(self):
         return self.vehicle.get_transform()
@@ -325,7 +379,9 @@ class Environment:
         position = self.vehicle.get_transform().location
         return np.array([position.x, position.y, position.z])
 
-
+# ==============================================================================
+# -- Sensor processing ---------------------------------------------------------
+# ==============================================================================
     def get_observation(self):
         """ Observations in PyTorch format BCHW """
         frame = self.observation
