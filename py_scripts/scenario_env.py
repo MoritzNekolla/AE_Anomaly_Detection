@@ -43,9 +43,9 @@ except IndexError:
 
 import carla
 
-class Environment:
+class ScenarioEnvironment:
 
-    def __init__(self, world=None, host='localhost', port=2000, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=BEV_DISTANCE, cam_rotation=-90, cam_zoom=110, random_spawn=True, cam_x_offset=10.):
+    def __init__(self, world=None, host='localhost', port=2000, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=BEV_DISTANCE, cam_rotation=-90, cam_zoom=110, cam_x_offset=10.):
         weak_self = weakref.ref(self)
         self.client = carla.Client(host, port)            #Connect to server
         self.client.set_timeout(30.0)
@@ -56,17 +56,12 @@ class Environment:
         # traffic_manager.set_synchronous_mode(True)
 
         self.autoPilotOn = False
-        self.random_spawn = random_spawn
 
-        if not world == None: self.world = self.client.load_world(world)
-        else: self.world = self.client.load_world("Town01_Opt")
+        self.world = self.client.load_world(world)
 
         self.bp_lib = self.world.get_blueprint_library()
         self.map = self.world.get_map()
-        self.spawn_points = self.map.get_spawn_points()
-        self.spawn_point = None
         self.goalPoint = None
-        self.map_waypoints = self.map.generate_waypoints(3.0)
         self.trajectory_list = None
 
         self.s_width = s_width
@@ -81,22 +76,13 @@ class Environment:
         self.actor_list = []
         self.IM_WIDTH = IM_WIDTH
         self.IM_HEIGHT = IM_HEIGHT
-        self.weather = carla.WeatherParameters(
-            cloudiness=0.0,
-            precipitation=0.0,
-            precipitation_deposits= 0.0,
-            wind_intensity=0.0,
-            fog_density=0.0,
-            wetness=0.0,
-            sun_altitude_angle=70.0)
-
-        self.world.set_weather(self.weather)
         self.vehicle = None # important
 
+        self.settings = None
 
-    def init_ego(self):
 
-        self.vehicle_bp = self.bp_lib.find('vehicle.tesla.model3')
+    def init_ego(self, car_type):
+        self.vehicle_bp = self.bp_lib.find(car_type)
         self.ss_camera_bp = self.bp_lib.find('sensor.camera.rgb')
         # self.ss_camera_bp_sg = self.bp_lib.find('sensor.camera.semantic_segmentation')
         self.col_sensor_bp = self.bp_lib.find('sensor.other.collision')
@@ -125,18 +111,21 @@ class Environment:
 
 
 
-    def reset(self):
-
+    def reset(self, settings):
         self.deleteActors()
         
+        # Todo: set settings
+        self.settings = settings
+
         self.actor_list = []
         self.collision_hist = []
 
         # Spawn vehicle
-        if self.random_spawn: self.spawn_point = random.choice(self.spawn_points)
-        else: self.spawn_point = self.spawn_points[1]
+        a_location = carla.Location(self.settings.agent.spawn_point.location.x, self.settings.agent.spawn_point.location.y, self.settings.agent.spawn_point.location.z)
+        a_rotation = carla.Rotation(self.settings.agent.spawn_point.rotation.pitch, self.settings.agent.spawn_point.rotation.yaw, self.settings.agent.spawn_point.rotation.roll)
+        a_transform = carla.Transform(a_location, a_rotation)
 
-        self.vehicle = self.world.spawn_actor(self.vehicle_bp, self.spawn_point)
+        self.vehicle = self.world.spawn_actor(self.vehicle_bp, a_transform)
         self.vehicle.set_autopilot(self.autoPilotOn)
         self.actor_list.append(self.vehicle)
 
@@ -157,6 +146,14 @@ class Environment:
         self.actor_list.append(self.col_sensor)
         self.col_sensor.listen(lambda event: self.__process_collision_data(event))
 
+        # spawn anomaly according to settings
+        self.spawn_anomaly()
+
+        # set weather according to settings
+        self.set_Weather()
+        
+        # select goal_point according to settings
+        self.set_goalPoint()
 
         self.episode_start = time.time()
         return self.get_observation()
@@ -199,77 +196,39 @@ class Environment:
 
         return self.get_observation(), reward, done, None
 
-    
-    def spawn_anomaly_ahead(self, distance=15):
-        transform = self.get_Vehicle_transform() #get vehicle location and rotation (0-360 degrees)
-        vec = transform.rotation.get_forward_vector()
-        transform.location.x = transform.location.x + vec.x * distance
-        transform.location.y = transform.location.y + vec.y * distance
-        transform.location.z = transform.location.z + vec.z * distance
-        self.spawn_anomaly(transform)
+    def spawn_anomaly(self):
+        # select anomaly according to settings
+        anomaly = self.bp_lib.filter(self.settings.anomaly.type)[0]
 
+        # spawn anomaly at specific point
+        anomaly_location = carla.Location(self.settings.anomaly.spawn_point.location.x, self.settings.anomaly.spawn_point.location.y, self.settings.anomaly.spawn_point.location.z)
+        anomaly_rotation = carla.Rotation(self.settings.anomaly.spawn_point.rotation.pitch, self.settings.anomaly.spawn_point.rotation.yaw, self.settings.anomaly.spawn_point.rotation.roll)
+        anomaly_transform = carla.Transform(anomaly_location, anomaly_rotation)
+        player = self.world.try_spawn_actor(anomaly, anomaly_transform)
 
-    def spawn_anomaly_alongRoad(self, max_numb):
-        if max_numb < 4: max_numb = 4
-        ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
-        wp_infront = [ego_map_point]
-        for x in range(max_numb):
-            wp_infront.append(wp_infront[-1].next(2.)[0])
-        
-        anomaly_spawn = random.choice(wp_infront[3:]) # prevent spawning object on top of ego_vehicle
-        location = anomaly_spawn.transform.location
-        rotation = anomaly_spawn.transform.rotation
-        return self.spawn_anomaly(carla.Transform(location, rotation))
-
-
-
-    def spawn_anomaly(self, transform):
-        ped_blueprints = self.bp_lib.filter('static.prop.*')
-        anomaly_object = random.choice(ped_blueprints)
-        # print(anomaly_object)
-        # print(anomaly_object.trigger_volume.extent)
-        player = self.world.try_spawn_actor(anomaly_object,transform)
-        # player = self.world.try_spawn_actor(random.choice(self.bp_lib.filter('static.prop.clothcontainer')),transform)
         self.actor_list.append(player)
-        self.anomaly_point = player
-        return anomaly_object.id, transform
+        return player
 
-    def set_goalPoint(self, max_numb):
-        if max_numb < 4: max_numb = 4
-        ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
-        self.trajectory_list = [ego_map_point]
-        for x in range(max_numb):
-            self.trajectory_list.append(self.trajectory_list[-1].next(2.)[0])
-
-        anomaly_spawn = self.trajectory_list[-1]
-        location = anomaly_spawn.transform
-
+    def set_goalPoint(self):
+        location = carla.Location(self.settings.goal_point.location.x, self.settings.goal_point.location.y, self.settings.goal_point.location.z)
         self.goalPoint = location
 
-    
-    def change_Weather(self):
+    def set_Weather(self):
         self.weather = carla.WeatherParameters(
-            cloudiness=0.0,
-            precipitation=70.0,
-            precipitation_deposits= 0.0,
-            wind_intensity=0.0,
-            fog_density=70.0,
-            fog_distance=3.0,
-            wetness=0.0,
-            sun_altitude_angle=70.0)
-
-        self.world.set_weather(self.weather)
-
-    def reset_Weather(self):
-        self.weather = carla.WeatherParameters(
-            cloudiness=0.0,
-            precipitation=0.0,
-            precipitation_deposits= 0.0,
-            wind_intensity=0.0,
-            fog_density=0.0,
-            wetness=0.0,
-            sun_altitude_angle=70.0)
-
+            cloudiness=self.settings.weather.cloudiness,
+            precipitation=self.settings.weather.precipitation,
+            precipitation_deposits=self.settings.weather.precipitation_deposits,
+            wind_intensity=self.settings.weather.wind_intensity,
+            sun_azimuth_angle=self.settings.weather.sun_azimuth_angle,
+            sun_altitude_angle=self.settings.weather.sun_altitude_angle,
+            fog_density=self.settings.weather.fog_density,
+            fog_distance=self.settings.weather.fog_distance,
+            fog_falloff=self.settings.weather.fog_falloff,
+            wetness=self.settings.weather.wetness,
+            scattering_intensity=self.settings.weather.scattering_intensity,
+            mie_scattering_scale=self.settings.weather.mie_scattering_scale,
+            rayleigh_scattering_scale=self.settings.weather.rayleigh_scattering_scale
+        )
         self.world.set_weather(self.weather)
 
     def makeRandomAction(self):
@@ -338,12 +297,8 @@ class Environment:
         print(f"### Autopilot: {self.autoPilotOn}")
         
 # ==============================================================================
-# -- Getters --------------------------------------------------------------------
+# -- Getter --------------------------------------------------------------------
 # ==============================================================================
-
-    def getSpawnPoint(self):
-        return self.spawn_point
-
     def getGoalPoint(self):
         return self.goalPoint
 

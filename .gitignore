@@ -8,4 +8,4 @@ model.pt
 __pycache__
 runs/*
 *tfevents*
-
+*.json
