@@ -226,10 +226,9 @@ class Environment:
     def spawn_anomaly(self, transform):
         ped_blueprints = self.bp_lib.filter('static.prop.*')
         anomaly_object = random.choice(ped_blueprints)
-        # print(anomaly_object)
-        # print(anomaly_object.trigger_volume.extent)
+
         player = self.world.try_spawn_actor(anomaly_object,transform)
-        # player = self.world.try_spawn_actor(random.choice(self.bp_lib.filter('static.prop.clothcontainer')),transform)
+
         self.actor_list.append(player)
         self.anomaly_point = player
         return anomaly_object.id, transform
@@ -298,11 +297,14 @@ class Environment:
         
     #     self.world.debug.draw_point(wp.transform.location, size=0.05, life_time=-1., color=carla.Color(r=0, g=0, b=255))
 
+    # plots the path from spawn to goal and anomaly boundingbox
     def plotTrajectory(self):
-        for w in self.trajectory_list:
-            self.world.debug.draw_point(w.transform.location, size=0.2, life_time=-1., color=carla.Color(r=0, g=0, b=255))
+        lifetime=2.
+        for x in range(len(self.trajectory_list)-1):
+            w = self.trajectory_list[x]
+            self.world.debug.draw_point(w.transform.location, size=0.2, life_time=lifetime, color=carla.Color(r=0, g=0, b=255))
         # color goal point in red   
-        self.world.debug.draw_point(self.trajectory_list[-1].transform.location, size=0.3, life_time=-1., color=carla.Color(r=255, g=140, b=0))
+        self.world.debug.draw_point(self.trajectory_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
 
         # color anomaly
         bounding_box_set = self.world.get_level_bbs(carla.CityObjectLabel.Dynamic) + self.world.get_level_bbs(carla.CityObjectLabel.Static)
@@ -314,8 +316,8 @@ class Environment:
                 best = distance
                 bbox = box
         # self.world.debug.draw_box(carla.BoundingBox(self.anomaly_point.get_transform().location,carla.Vector3D(3.5,3.5,4)),self.anomaly_point.get_transform().rotation, 0.3, carla.Color(255,140,0,0),-1.)
-        self.world.debug.draw_box(bbox, self.anomaly_point.get_transform().rotation, 0.2, carla.Color(0,0,0,0),-1.)
-        time.sleep(2)
+        self.world.debug.draw_box(bbox, self.anomaly_point.get_transform().rotation, 0.15, carla.Color(0,0,0,0),lifetime)
+        time.sleep(1)
 
     #Returns only the waypoints in one lane
     def single_lane(self, waypoint_list, lane):
@@ -354,15 +356,15 @@ class Environment:
             "precipitation": wheather.precipitation,
             "precipitation_deposits": wheather.precipitation_deposits,
             "wind_intensity": wheather.wind_intensity,
-            "sun_azimuth_angle": wheather.sun_azimuth_angle,
+            # "sun_azimuth_angle": wheather.sun_azimuth_angle,
             "sun_altitude_angle": wheather.sun_altitude_angle,
             "fog_density": wheather.fog_density,
-            "fog_distance": wheather.fog_distance,
-            "fog_falloff": wheather.fog_falloff,
-            "wetness": wheather.wetness,
-            "scattering_intensity": wheather.scattering_intensity,
-            "mie_scattering_scale": wheather.mie_scattering_scale,
-            "rayleigh_scattering_scale": wheather.rayleigh_scattering_scale
+            # "fog_distance": wheather.fog_distance,
+            # "fog_falloff": wheather.fog_falloff,
+            "wetness": wheather.wetness
+            # "scattering_intensity": wheather.scattering_intensity,
+            # "mie_scattering_scale": wheather.mie_scattering_scale,
+            # "rayleigh_scattering_scale": wheather.rayleigh_scattering_scale
         }
         return w_dict
 

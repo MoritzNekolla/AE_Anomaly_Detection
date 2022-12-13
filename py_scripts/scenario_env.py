@@ -139,8 +139,6 @@ class ScenarioEnvironment:
         # self.actor_list.append(self.ss_cam_seg)
         # self.ss_cam_seg.listen(lambda data: self.__process_sensor_data_Seg(data))
 
-        time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
-
         # Attach and listen to collision sensor
         self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
         self.actor_list.append(self.col_sensor)
@@ -154,6 +152,8 @@ class ScenarioEnvironment:
         
         # select goal_point according to settings
         self.set_goalPoint()
+
+        time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 
         self.episode_start = time.time()
         return self.get_observation()
@@ -219,15 +219,15 @@ class ScenarioEnvironment:
             precipitation=self.settings.weather.precipitation,
             precipitation_deposits=self.settings.weather.precipitation_deposits,
             wind_intensity=self.settings.weather.wind_intensity,
-            sun_azimuth_angle=self.settings.weather.sun_azimuth_angle,
+            # sun_azimuth_angle=self.settings.weather.sun_azimuth_angle,
             sun_altitude_angle=self.settings.weather.sun_altitude_angle,
             fog_density=self.settings.weather.fog_density,
-            fog_distance=self.settings.weather.fog_distance,
-            fog_falloff=self.settings.weather.fog_falloff,
-            wetness=self.settings.weather.wetness,
-            scattering_intensity=self.settings.weather.scattering_intensity,
-            mie_scattering_scale=self.settings.weather.mie_scattering_scale,
-            rayleigh_scattering_scale=self.settings.weather.rayleigh_scattering_scale
+            # fog_distance=self.settings.weather.fog_distance,
+            # fog_falloff=self.settings.weather.fog_falloff,
+            wetness=self.settings.weather.wetness
+            # scattering_intensity=self.settings.weather.scattering_intensity,
+            # mie_scattering_scale=self.settings.weather.mie_scattering_scale,
+            # rayleigh_scattering_scale=self.settings.weather.rayleigh_scattering_scale
         )
         self.world.set_weather(self.weather)
 
@@ -309,15 +309,15 @@ class ScenarioEnvironment:
             "precipitation": wheather.precipitation,
             "precipitation_deposits": wheather.precipitation_deposits,
             "wind_intensity": wheather.wind_intensity,
-            "sun_azimuth_angle": wheather.sun_azimuth_angle,
+            # "sun_azimuth_angle": wheather.sun_azimuth_angle,
             "sun_altitude_angle": wheather.sun_altitude_angle,
             "fog_density": wheather.fog_density,
-            "fog_distance": wheather.fog_distance,
-            "fog_falloff": wheather.fog_falloff,
-            "wetness": wheather.wetness,
-            "scattering_intensity": wheather.scattering_intensity,
-            "mie_scattering_scale": wheather.mie_scattering_scale,
-            "rayleigh_scattering_scale": wheather.rayleigh_scattering_scale
+            # "fog_distance": wheather.fog_distance,
+            # "fog_falloff": wheather.fog_falloff,
+            "wetness": wheather.wetness
+            # "scattering_intensity": wheather.scattering_intensity,
+            # "mie_scattering_scale": wheather.mie_scattering_scale,
+            # "rayleigh_scattering_scale": wheather.rayleigh_scattering_scale
         }
         return w_dict
 

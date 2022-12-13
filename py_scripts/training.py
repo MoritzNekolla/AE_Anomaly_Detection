@@ -134,6 +134,9 @@ class Training:
         # d = Q_s_a - (r + gamma * max_future_q)
 
         criterion = nn.HuberLoss()  # was SmoothL1Loss
+        print(state_action_values)
+        print(expected_state_action_values.unsqueeze(1))
+        print("#####")
         loss = criterion(
             state_action_values, expected_state_action_values.unsqueeze(1)
         )  # x,y is used as x-y to compute d
