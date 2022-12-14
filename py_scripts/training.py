@@ -89,7 +89,7 @@ class Training:
             return
 
         transitions = self.replay_memory.sample(BATCH_SIZE)
-        batch = Transition(*zip(*transitions))
+        batch = Transition(*zip(*transitions))  
 
         # Compute a mask of non-final states and concatenate the batch elements
         # (a final state would've been the one after which simulation ended)
@@ -114,6 +114,10 @@ class Training:
             1, action_batch
         )  # Gathers values along an axis (select columns of actions taken)
 
+        # print(q_current_list)
+        # print(action_batch)
+        # print(state_action_values)
+
         # Compute max(Q(s_{t+1},a))
         # Expected values of actions for non_final_next_states are computed based
         # on the "older" target_net; selecting their best reward with max(1)[0].
@@ -121,9 +125,12 @@ class Training:
         # state value or 0 in case the state was final.
         next_state_values = torch.zeros(BATCH_SIZE, device=self.device)
         next_state_values[non_final_mask] = self.target_net(non_final_next_states.to(self.device)).max(1)[0].detach()
+        # print(next_state_values)
         # Compute the expected Q values
         expected_state_action_values = (next_state_values * DISCOUNT_FACTOR) + reward_batch
-
+        # print(reward_batch)
+        # print(expected_state_action_values)
+        # print("#####")
         # Compute Huber loss
         # The Huber loss acts like the mean squared error when the error is small,
         # but like the mean absolute error when the error is large.
@@ -134,9 +141,6 @@ class Training:
         # d = Q_s_a - (r + gamma * max_future_q)
 
         criterion = nn.HuberLoss()  # was SmoothL1Loss
-        print(state_action_values)
-        print(expected_state_action_values.unsqueeze(1))
-        print("#####")
         loss = criterion(
             state_action_values, expected_state_action_values.unsqueeze(1)
         )  # x,y is used as x-y to compute d

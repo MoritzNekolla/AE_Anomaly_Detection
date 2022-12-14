@@ -23,7 +23,9 @@ from clearml import Task
 from AE_model import AutoEncoder
 from model_eval import Evaluater
 
-from env_carla import Environment
+# from env_carla import Environment
+from ScenarioPlanner import ScenarioPlanner
+from scenario_env import ScenarioEnvironment
 
 
 from training import Training
@@ -37,7 +39,8 @@ from training import EPS_START
 
 PREVIEW = False
 VIDEO_EVERY = 1_000
-PATH = "model.pt"
+PATH_MODEL = "model.pt"
+PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2022-12-14_00:59/"
 IM_HEIGHT = 256
 IM_WIDTH = 256
 
@@ -53,7 +56,7 @@ def main(withAE, concatAE):
 
     if withAE:
         ae_model = AutoEncoder()
-        evaluater = Evaluater(ae_model, device, PATH)
+        evaluater = Evaluater(ae_model, device, PATH_MODEL)
 
     if withAE and not concatAE:
         DISTANCE_MATRIX = init_distance_matrices(EGO_X,EGO_Y)
@@ -61,10 +64,13 @@ def main(withAE, concatAE):
 
     writer = SummaryWriter()
 #     env = Environment(host="tks-fly.fzi.de", port=2000)
-    env = Environment(world="Town01_Opt", host="localhost", port=2000, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130, random_spawn=False)
-    env.init_ego()
+    #env = ScenarioEnvironment(world="Town01_Opt", host="localhost", port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130, random_spawn=False)
+    settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
+    env = ScenarioEnvironment(world=settings.world, host='localhost', port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+    env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
+    scenario_index = 0
 
     epsilon = EPS_START
     reward_best = -1000
@@ -81,20 +87,20 @@ def main(withAE, concatAE):
         start = time.time()
         n_frame = 1
 
-        env.reset()
-        env.spawn_anomaly_alongRoad(max_numb=20)
+        env.reset(settings=settings.scenario_set[f"scenario_{scenario_index}"])
+        # env.spawn_anomaly_alongRoad(max_numb=20)
         spawn_point = env.get_Vehicle_positionVec()
 
         obs_current = env.get_observation()
         obs_current = obs_current[0] #no segemntation
 
         if concatAE:
-            coloredDetectionMap = evaluater.getColoredDetectionMap(obs_current)
-            coloredDetectionMap = np.transpose(coloredDetectionMap, (2,1,0))
+            heatMap = evaluater.getHeatMap(obs_current)
+            heatMap = np.transpose(heatMap, (2,1,0))
 
         
         obs_current = np.transpose(obs_current, (2,1,0))
-        if concatAE: obs_current = np.array([obs_current, coloredDetectionMap])
+        if concatAE: obs_current = np.array([obs_current, heatMap])
         obs_current = np.array([obs_current])
         # print(obs_current.shape)
         obs_current = torch.as_tensor(obs_current)
@@ -119,8 +125,8 @@ def main(withAE, concatAE):
             obs_next = obs_next[0] #no segemntation
 
             if concatAE:
-                coloredDetectionMap = evaluater.getColoredDetectionMap(obs_next)
-                coloredDetectionMap = np.transpose(coloredDetectionMap, (2,1,0))
+                heatMap = evaluater.getHeatMap(obs_next)
+                heatMap = np.transpose(heatMap, (2,1,0))
 
             if withAE and not concatAE:
                 detectionMap = evaluater.getDetectionMap(obs_next)
@@ -143,11 +149,11 @@ def main(withAE, concatAE):
             else:
                 # if withAE:
                 #     # heatmap = evaluater.getHeatMap(obs_next)
-                #     detectionMap = evaluater.getColoredDetectionMap(obs_next)
+                #     detectionMap = evaluater.getheatMap(obs_next)
                 #     obs_next = np.hstack((obs_next, detectionMap))
 
                 obs_next = np.transpose(obs_next, (2,1,0))
-                if concatAE: obs_next = np.array([obs_next, coloredDetectionMap])
+                if concatAE: obs_next = np.array([obs_next, heatMap])
                 obs_next = np.array([obs_next])
                 obs_next = torch.as_tensor(obs_next)
             
@@ -216,6 +222,10 @@ def main(withAE, concatAE):
         writer.add_scalar("Exploration-Exploitation/epsilon", epsilon, i)
         epsilon = trainer.decay_epsilon(epsilon)
 
+        scenario_index += 1
+        if scenario_index >= settings.size:
+            scenario_index = 0
+            print("Reseting scenario counter!")
         print(f"Episode: {i}")
 
     writer.flush()

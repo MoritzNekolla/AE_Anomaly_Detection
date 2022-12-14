@@ -28,7 +28,7 @@ IM_WIDTH = 2048
 IM_HEIGHT = 2048
 CAM_HEIGHT = 20.5
 ROTATION = -70
-CAM_OFFSET = 18.
+CAM_OFFSET = 10.
 ZOOM = 130
 ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/"
 # MAP_SET = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
@@ -37,7 +37,7 @@ MAP_SET = ["Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt",
 
 class ScenarioPlanner:
 
-    def __init__(self, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=CAM_HEIGHT, cam_rotation=ROTATION, cam_zoom=ZOOM, cam_x_offset=10., host="localhost"):
+    def __init__(self, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=CAM_HEIGHT, cam_rotation=ROTATION, cam_zoom=ZOOM, cam_x_offset=CAM_OFFSET, host="localhost"):
         self.s_width = s_width
         self.s_height = s_height
         self.cam_height = cam_height
@@ -125,15 +125,7 @@ class ScenarioPlanner:
         errorFlag = False
         for x in range(amount):
             # add to dict
-            try:
-                s_dict, snapshot = self.generateScenario(self.env)
-            except:
-                errorFlag = True
-                print("!!! Error: Simulation Crashed !!!")
-                print("==> saving scenario_set.json...")
-                self.saveScenarioSettings(timestr=timestr, amount=amount, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, errorFlag=errorFlag)
-                break
-
+            s_dict, snapshot = self.generateScenario(self.env)
             s_dict["snapshot"] = x
             scenario_set[f"scenario_{x}"] = s_dict
             
@@ -143,22 +135,22 @@ class ScenarioPlanner:
                 os.mkdir(pathToSnaps)
             snapshot = (snapshot * 255).astype("int")
             cv2.imwrite(pathToSnaps + f"snap_{x}.png", snapshot)
+            
+            # save ScenarioSettings
+            self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath)
 
             # sleep a second to ensure clearing of debug_helper
             time.sleep(1)
         
-        if errorFlag == False:
-            # save ScenarioSettings
-            self.saveScenarioSettings(timestr=timestr, amount=amount, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, errorFlag=errorFlag)
-            print("HEEEYy")
-            # destroy last env
-            self.env.deleteActors()
+        # destroy last env
+        self.env.deleteActors()
 
+        print("### Finished. Good bye")
 
 
         
     
-    def saveScenarioSettings(self, timestr, amount, car_type, scenario_set, storagePath, errorFlag):
+    def saveScenarioSettings(self, timestr, amount, car_type, scenario_set, storagePath):
         # type of set
         final_set = {
             "date": timestr,
@@ -170,11 +162,6 @@ class ScenarioPlanner:
 
         with open(storagePath + "scenario_set.json", "w") as fp:
             json.dump(final_set, fp, indent = 4)
-
-        if errorFlag: 
-            print("### Finished with Errors!")
-        else:
-            print("### Finished. Good bye")
 
     @staticmethod
     def create_snap_video(storagePath, max_scenes=20):
@@ -188,24 +175,23 @@ class ScenarioPlanner:
                 path = path_list[x]
                 video.write(cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB))
                 video.write(cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB))
+                video.write(cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB))
+                video.write(cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB))
             cv2.destroyAllWindows()
             return video.release()
 
 
 # ==============================================================================
-# -- Check loading  ------------------------------------------------------------
+# -- Check reloading scenario --------------------------------------------------
 # ==============================================================================
 
     @staticmethod
     def createComparison(path):
-        with open(path+'scenario_set.json') as json_file:
-            settings = json.load(json_file)
-            # convert to a dictionary that supports attribute-style access, a la JavaScript
-            settings = DefaultMunch.fromDict(settings)
+        settings = ScenarioPlanner.load_settings(path)
 
         # pick random scenario
         scene_num = random.randint(0, int(settings.size) - 1)
-        scene_num = 2
+        scene_num = 3
         print(f"Compare scenario_{scene_num} with its recreation:")
         
         snap_scenario_1 = cv2.imread(path + f"snapshots/snap_{scene_num}.png")
@@ -224,6 +210,19 @@ class ScenarioPlanner:
         ax2.set_title(f"recreation_snap")
         ax2.set_axis_off()
         ax2.imshow(recreation_snapshot)
+
+    @staticmethod
+    def load_settings(path):
+        with open(path+'scenario_set.json') as json_file:
+            settings = json.load(json_file)
+            # convert to a dictionary that supports attribute-style access, a la JavaScript
+            settings = DefaultMunch.fromDict(settings)
+
+        folder_name = path.split("/")[-1]
+        if folder_name == "": folder_name = path.split("/")[-2]
+        print(f"~~~~~~~~~~~~~~\n# Scenario set: {folder_name} \n# Contains {settings.size} scenarios among world: {settings.world} \n~~~~~~~~~~~~~~")
+
+        return settings
 
 # ==============================================================================
 # -- Utility methods -----------------------------------------------------------
