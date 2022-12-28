@@ -12,6 +12,7 @@ import cv2
 import weakref
 
 import torch
+from Utils import plotToImage
 
 IM_WIDTH = 256
 IM_HEIGHT = 256
@@ -79,6 +80,7 @@ class ScenarioEnvironment:
         self.vehicle = None # important
 
         self.settings = None
+        self.time_start = None
 
 
     def init_ego(self, car_type):
@@ -113,12 +115,13 @@ class ScenarioEnvironment:
 
     def reset(self, settings):
         self.deleteActors()
-        
-        # Todo: set settings
+        self.time_start = time.time()
+
         self.settings = settings
 
         self.actor_list = []
         self.collision_hist = []
+        self.trajectory_list = self.loadTrajectory(settings.goal_trajectory)
 
         # Spawn vehicle
         a_location = carla.Location(self.settings.agent.spawn_point.location.x, self.settings.agent.spawn_point.location.y, self.settings.agent.spawn_point.location.z)
@@ -179,22 +182,36 @@ class ScenarioEnvironment:
         elif action == 8:
             self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
 
-
+        # Get time
+        run_time = time.time() - self.time_start
+        # Get goal distance
+        goal_distance = self.goalPoint.distance(self.get_Vehicle_transform().location)
         # Get velocity of vehicle
-        v = self.vehicle.get_velocity()
-        v_kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
+        # v = self.vehicle.get_velocity()
+        # v_kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
 
         # Set reward and 'done' flag
         done = False
+        reward_collision = 0
+        crashed = 0
         if len(self.collision_hist) != 0:
             done = True
-            reward = -100
-        elif v_kmh < 20:
-            reward = v_kmh / (80 - 3*v_kmh)
-        else:
-            reward = 1
+            reward_collision = -10
+            crashed = 1
+        # elif v_kmh < 20:
+        #     reward = v_kmh / (80 - 3*v_kmh)
+        # else:
+        #     reward = 1
 
-        return self.get_observation(), reward, done, None
+        reward_time = 30 - run_time
+        reward_distance = self.settings.euc_distance - goal_distance
+
+        reward_total = reward_time + reward_distance + reward_collision
+        if goal_distance < 1.:
+            done = True
+            reward_total = 100
+
+        return self.get_observation(), reward_total, done, crashed
 
     def spawn_anomaly(self):
         # select anomaly according to settings
@@ -257,24 +274,29 @@ class ScenarioEnvironment:
         
     #     self.world.debug.draw_point(wp.transform.location, size=0.05, life_time=-1., color=carla.Color(r=0, g=0, b=255))
 
-    def plotTrajectory(self):
-        for w in self.trajectory_list:
-            self.world.debug.draw_point(w.transform.location, size=0.2, life_time=-1., color=carla.Color(r=0, g=0, b=255))
-        # color goal point in red   
-        self.world.debug.draw_point(self.trajectory_list[-1].transform.location, size=0.3, life_time=-1., color=carla.Color(r=255, g=140, b=0))
+    # load the regular waypoint trajectory from the settings file. (not a route that avoids the anomaly)
+    def loadTrajectory(self, goal_trajectory):
+        trajectory = []
+        for x in range(len(goal_trajectory)):
+            point = goal_trajectory["waypoint{x}"]
+            point = np.array([point.x, point.y, point.z])
+            trajectory.append(point)
+        
+        return np.array(trajectory)
 
-        # color anomaly
-        bounding_box_set = self.world.get_level_bbs(carla.CityObjectLabel.Dynamic) + self.world.get_level_bbs(carla.CityObjectLabel.Static)
-        best = 100000.
-        bbox = None
-        for box in bounding_box_set:
-            distance = box.location.distance(self.anomaly_point.get_transform().location)
-            if distance < best:
-                best = distance
-                bbox = box
-        # self.world.debug.draw_box(carla.BoundingBox(self.anomaly_point.get_transform().location,carla.Vector3D(3.5,3.5,4)),self.anomaly_point.get_transform().rotation, 0.3, carla.Color(255,140,0,0),-1.)
-        self.world.debug.draw_box(bbox, self.anomaly_point.get_transform().rotation, 0.2, carla.Color(0,0,0,0),-1.)
-        time.sleep(2)
+    def createMiniMap(self):
+        p_agent = self.get_Vehicle_positionVec()
+        p_goal = self.goalPoint.location
+
+        plt.style.use('dark_background')
+        fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
+        plt.axis("off")
+        plt.plot(self.trajectory_list[:,0], self.trajectory_list[:,1], color="white", lw=3)
+        plt.plot(p_agent[0], p_agent[1], color="blue", marker='o', markersize=12)
+        plt.plot(p_goal.x, p_goal.y, color="red", marker='o', markersize=12)
+
+        miniMap = plotToImage(fig)
+        return miniMap
 
     #Returns only the waypoints in one lane
     def single_lane(self, waypoint_list, lane):
@@ -299,6 +321,10 @@ class ScenarioEnvironment:
 # ==============================================================================
 # -- Getter --------------------------------------------------------------------
 # ==============================================================================
+    
+    def getGoalTrajectory(self):
+        return self.trajectory_list
+    
     def getGoalPoint(self):
         return self.goalPoint
 

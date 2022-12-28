@@ -22,6 +22,7 @@ N_ACTIONS = 9
 
 RESET_SLEEP_TIME = 1
 
+MIN_BBOX_SIZE = 0.26
 # ==============================================================================
 # -- Find CARLA module ---------------------------------------------------------
 # ==============================================================================
@@ -63,10 +64,10 @@ class Environment:
 
         self.bp_lib = self.world.get_blueprint_library()
         self.map = self.world.get_map()
-        self.spawn_points = self.map.get_spawn_points()
-        self.spawn_point = None
         self.goalPoint = None
         self.map_waypoints = self.map.generate_waypoints(3.0)
+        self.spawn_points = self.map.get_spawn_points()
+        self.spawn_point = None
         self.trajectory_list = None
 
         self.s_width = s_width
@@ -79,8 +80,6 @@ class Environment:
         self.anomaly_point = None
 
         self.actor_list = []
-        self.IM_WIDTH = IM_WIDTH
-        self.IM_HEIGHT = IM_HEIGHT
         self.weather = carla.WeatherParameters(
             cloudiness=0.0,
             precipitation=0.0,
@@ -133,7 +132,9 @@ class Environment:
         self.collision_hist = []
 
         # Spawn vehicle
-        if self.random_spawn: self.spawn_point = random.choice(self.spawn_points)
+        if self.random_spawn: 
+            self.spawn_point = random.choice(self.map_waypoints).transform
+            self.spawn_point.location.z += 0.3 # prevent collision at spawn point
         else: self.spawn_point = self.spawn_points[1]
 
         self.vehicle = self.world.spawn_actor(self.vehicle_bp, self.spawn_point)
@@ -209,17 +210,42 @@ class Environment:
         self.spawn_anomaly(transform)
 
 
-    def spawn_anomaly_alongRoad(self, max_numb):
+    def spawn_anomaly_alongRoad(self, max_numb, disposition_prob=0.5, max_lateral_disposition=3):
         if max_numb < 4: max_numb = 4
         ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
         wp_infront = [ego_map_point]
         for x in range(max_numb):
             wp_infront.append(wp_infront[-1].next(2.)[0])
-        
-        anomaly_spawn = random.choice(wp_infront[3:]) # prevent spawning object on top of ego_vehicle
-        location = anomaly_spawn.transform.location
-        rotation = anomaly_spawn.transform.rotation
-        return self.spawn_anomaly(carla.Transform(location, rotation))
+
+        wp_infront = wp_infront[3:] # prevent spawning object on top of ego_vehicle
+        s_index = random.randrange(0, len(wp_infront)-2)
+
+        spawn =  wp_infront[s_index]
+        spawn_location = spawn.transform.location
+
+        if random.random() < disposition_prob and not spawn_location.distance(spawn.transform.location) == 0: # sometimes future waypoints are the same => no vector (weird)
+            # calc orthogonal vector
+            next_wp = wp_infront[s_index+2].transform.location
+            dir_vector = np.array([spawn_location.x - next_wp.x, spawn_location.y - next_wp.y, spawn_location.z - next_wp.z])
+            # dir_vector = dir_vector / np.linalg.norm(dir_vector) # normalize vector
+            x_axis = (-dir_vector[1] - dir_vector[2]) / dir_vector[0] # v_1*v_2 = 0  =>  x_1 = (-x_2-x_3) / y_1 ||| y_2, y_3 = 1
+            orthogonal_vector = np.array([x_axis*dir_vector[0], dir_vector[1], dir_vector[2]])
+            orthogonal_vector = orthogonal_vector / np.linalg.norm(orthogonal_vector) # normalize vector
+            # print(orthogonal_vector)
+            # print(np.linalg.norm(orthogonal_vector))
+
+            # disposition
+            lateral_disposition = random.random() * max_lateral_disposition # strength of disposition
+            if random.random() < 0.5: lateral_disposition = lateral_disposition * (-1) # left or right disposition
+            orthogonal_vector = orthogonal_vector * lateral_disposition
+
+            # apply to current location
+            spawn_location.x += orthogonal_vector[0]
+            spawn_location.y += orthogonal_vector[1]
+            spawn_location.z += orthogonal_vector[2]
+
+        rotation = spawn.transform.rotation
+        return self.spawn_anomaly(carla.Transform(spawn_location, rotation))
 
 
 
@@ -228,6 +254,7 @@ class Environment:
         anomaly_object = random.choice(ped_blueprints)
 
         player = self.world.try_spawn_actor(anomaly_object,transform)
+        if player == None: print("!!! No actor spawned !!!")
 
         self.actor_list.append(player)
         self.anomaly_point = player
@@ -279,23 +306,6 @@ class Environment:
             self.step(1)
         elif v <= 1.0:
             self.step(2)
-    
-    # def plotWaypoints(self):
-    #     vehicle_loc = self.vehicle.get_location()
-
-    #     self.world.debug.draw_string(vehicle_loc, str("Hallo"), draw_shadow=False, life_time=-1)
-
-    #     for w in self.map_waypoints:
-    #         # self.world.debug.draw_string(w.transform.location, 'O', draw_shadow=False,
-    #         #                                 color=carla.Color(r=255, g=0, b=0), life_time=-1,
-    #         #                                 persistent_lines=True)
-    #         # print(w.transform.location)
-    #         self.world.debug.draw_point(w.transform.location, size=0.05, life_time=-1., color=carla.Color(r=255, g=0, b=0))
-
-    #     wp = self.map.get_waypoint(vehicle_loc, project_to_road=True,
-    #             lane_type=carla.LaneType.Driving)
-        
-    #     self.world.debug.draw_point(wp.transform.location, size=0.05, life_time=-1., color=carla.Color(r=0, g=0, b=255))
 
     # plots the path from spawn to goal and anomaly boundingbox
     def plotTrajectory(self):
@@ -315,8 +325,12 @@ class Environment:
             if distance < best:
                 best = distance
                 bbox = box
+        bbox.extent.x = MIN_BBOX_SIZE if bbox.extent.x < MIN_BBOX_SIZE else bbox.extent.x
+        bbox.extent.y = MIN_BBOX_SIZE if bbox.extent.y < MIN_BBOX_SIZE else bbox.extent.y
+        bbox.extent.z = MIN_BBOX_SIZE if bbox.extent.z < MIN_BBOX_SIZE else bbox.extent.z
+
         # self.world.debug.draw_box(carla.BoundingBox(self.anomaly_point.get_transform().location,carla.Vector3D(3.5,3.5,4)),self.anomaly_point.get_transform().rotation, 0.3, carla.Color(255,140,0,0),-1.)
-        self.world.debug.draw_box(bbox, self.anomaly_point.get_transform().rotation, 0.15, carla.Color(0,0,0,0),lifetime)
+        self.world.debug.draw_box(bbox, self.anomaly_point.get_transform().rotation, 0.15, carla.Color(r=0, g=0, b=0),lifetime)
         time.sleep(1)
 
     #Returns only the waypoints in one lane
@@ -346,6 +360,9 @@ class Environment:
     def getSpawnPoint(self):
         return self.spawn_point
 
+    def getGoalTrajectory(self):
+        return self.trajectory_list
+        
     def getGoalPoint(self):
         return self.goalPoint
 
@@ -431,9 +448,6 @@ class Environment:
         tmp = np.array(tmp)
         tmp = tmp.transpose(2,1,0)
         return tmp
-
-    def exit_env(self):
-        self.deleteEnv()
     
     def deleteActors(self):
         if not self.vehicle == None:
@@ -442,6 +456,9 @@ class Environment:
         for actor in self.actor_list:
             actor.destroy()       
         # self.client.apply_batch([carla.command.DestroyActor(x) for x in self.actor_list])
+        for actor in self.actor_list:
+            if self.isActorAlive(actor=actor):
+                print("!Actor destruction failed!")
 
     def __del__(self):
         print("__del__ called")

@@ -23,10 +23,24 @@ from env_carla import Environment
 
 
 # returns all absolute paths in #paths
-def get_image_paths(path):
+def get_image_paths(path, filter="*"):
     path_list = []
 
     for root, dirs, files in os.walk(os.path.abspath(path)):
         for file in files:
-            path_list.append(os.path.join(root, file))
+            if filter == "*":
+                path_list.append(os.path.join(root, file))
+            else:
+                path = os.path.join(root, file)
+                endpoint = path.split(".")[-1]
+                if endpoint == filter:
+                    path_list.append(path)
     return path_list
+
+# takes in a figure and converts it to an image
+def plotToImage(figure):
+    canvas = figure.canvas
+    canvas.draw()
+    data = np.frombuffer(canvas.tostring_rgb(), dtype=np.uint8)
+    image = data.reshape(canvas.get_width_height()[::-1] + (3,))
+    return image

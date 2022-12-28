@@ -19,6 +19,7 @@ import cv2
 from PIL import Image
 from munch import DefaultMunch
 import torch
+from clearml import Task, Logger
 
 from env_carla import Environment
 from scenario_env import ScenarioEnvironment
@@ -28,16 +29,19 @@ IM_WIDTH = 2048
 IM_HEIGHT = 2048
 CAM_HEIGHT = 20.5
 ROTATION = -70
-CAM_OFFSET = 10.
+CAM_OFFSET = 18.
 ZOOM = 130
 ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/"
+# ROOT_STORAGE_PATH = "./scenario_sets/"
 # MAP_SET = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
 MAP_SET = ["Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt","Town01_Opt","Town01_Opt"]
 
+DISPOSITION_PROB = 0.4
+MAX_LATERAL_DISPOSITION = 3
 
 class ScenarioPlanner:
 
-    def __init__(self, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=CAM_HEIGHT, cam_rotation=ROTATION, cam_zoom=ZOOM, cam_x_offset=CAM_OFFSET, host="localhost"):
+    def __init__(self, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=CAM_HEIGHT, cam_rotation=ROTATION, cam_zoom=ZOOM, cam_x_offset=CAM_OFFSET, host="tks-iris.fzi.de"):
         self.s_width = s_width
         self.s_height = s_height
         self.cam_height = cam_height
@@ -47,26 +51,33 @@ class ScenarioPlanner:
         self.host = host
 
         self.world = "Town01_Opt"
-        self.env = Environment(world=self.world, port=2000, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
-                                 cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
-        self.env.init_ego()
+        self.createEnvironment()
+
 
     def generateScenario(self, env):
         env.reset()
-        anomaly_id, anomaly_transform = env.spawn_anomaly_alongRoad(max_numb=20)
+        anomaly_id, anomaly_transform = env.spawn_anomaly_alongRoad(max_numb=20, disposition_prob=DISPOSITION_PROB, max_lateral_disposition=MAX_LATERAL_DISPOSITION)
 
         spawn_point_transform = env.getSpawnPoint()
         env.set_goalPoint(max_numb=30)
         goal_point = env.getGoalPoint()
+        goal_trajectory = env.getGoalTrajectory()
         s_g_distance = spawn_point_transform.location.distance(goal_point.location)
         env.plotTrajectory()
 
         weather = env.get_Weather()
         snapshot, _ = env.get_observation()
-        # plt.imshow(snapshot)
-        # plt.show()
-        # print(anomaly_transform)
-        # print(spawn_point_transform)
+
+        # create dict for goal_trajectory
+        goal_trajectory_dict = {}
+        for x in range(len(goal_trajectory)):
+            point = goal_trajectory[x].transform.location
+            goal_trajectory_dict[f"waypoint{x}"] = {
+                "x": point.x,
+                "y": point.y,
+                "z": point.z
+            }
+
         anomaly_point = {
             "location": {
                 "x": anomaly_transform.location.x,
@@ -110,19 +121,26 @@ class ScenarioPlanner:
                 "spawn_point": spawn_point
             },
             "goal_point": goal_point,
+            "goal_trajectory": goal_trajectory_dict,
             "euc_distance": s_g_distance,
             "weather": weather
         }
 
         return scenario_dict, snapshot
 
+    def createEnvironment(self):
+        self.env = Environment(world=self.world, port=2000, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
+                            cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
+        # self.env = Environment(host="tks-iris.fzi.de", port=2000)
+        self.env.init_ego()
+
     def sampleScenariosSet(self, amount):
-        print(f"~~~~~~~~~~~~~~\n### Collecting {amount} scenarios among world: {self.world} \n~~~~~~~~~~~~~~")
+        print(f"~~~~~~~~~~~~~~\n# Collecting {amount} scenarios among world: {self.world} \n~~~~~~~~~~~~~~")
         scenario_set = {}
         timestr = time.strftime("%Y-%m-%d_%H:%M")
+        chunk_num = 0
         storagePath = self.create_Storage()
 
-        errorFlag = False
         for x in range(amount):
             # add to dict
             s_dict, snapshot = self.generateScenario(self.env)
@@ -137,30 +155,40 @@ class ScenarioPlanner:
             cv2.imwrite(pathToSnaps + f"snap_{x}.png", snapshot)
             
             # save ScenarioSettings
-            self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath)
+            if (x % 10 == 0 and not x == 0):
+                self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, chunk_num=chunk_num)
+                scenario_set = {}
+                chunk_num += 1
+                print(f"{x}|{amount}")
+
+                # destroy last env and create new
+                # self.env.deleteActors()
+                # self.createEnvironment()
 
             # sleep a second to ensure clearing of debug_helper
             time.sleep(1)
         
-        # destroy last env
+        # save and delete last env
+        self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, chunk_num=chunk_num)
         self.env.deleteActors()
 
-        print("### Finished. Good bye")
+        print("# Finished. Good bye")
 
 
         
     
-    def saveScenarioSettings(self, timestr, amount, car_type, scenario_set, storagePath):
-        # type of set
+    def saveScenarioSettings(self, timestr, amount, car_type, scenario_set, storagePath, chunk_num):
         final_set = {
             "date": timestr,
             "size": amount,
             "world": self.world,
+            "disposition_probability": DISPOSITION_PROB,
+            "max_lateral_disposition": MAX_LATERAL_DISPOSITION,
             "car_type": car_type,
             "scenario_set": scenario_set
         }
 
-        with open(storagePath + "scenario_set.json", "w") as fp:
+        with open(storagePath + f"chunk{chunk_num}.json", "w") as fp:
             json.dump(final_set, fp, indent = 4)
 
     @staticmethod
@@ -211,6 +239,7 @@ class ScenarioPlanner:
         ax2.set_axis_off()
         ax2.imshow(recreation_snapshot)
 
+    # returns settings as dict
     @staticmethod
     def load_settings(path):
         with open(path+'scenario_set.json') as json_file:
@@ -223,6 +252,26 @@ class ScenarioPlanner:
         print(f"~~~~~~~~~~~~~~\n# Scenario set: {folder_name} \n# Contains {settings.size} scenarios among world: {settings.world} \n~~~~~~~~~~~~~~")
 
         return settings
+
+    @staticmethod
+    def create_final_json(storagePath):
+        path_list = get_image_paths(storagePath, filter="json")
+        settings_list = []
+        for x in range(len(path_list)):
+            with open(storagePath + f"chunk{x}.json") as json_file:
+                settings = json.load(json_file)
+                # convert to a dictionary that supports attribute-style access, a la JavaScript
+                settings = DefaultMunch.fromDict(settings)
+                settings_list.append(settings)
+        root_file = settings_list.pop(0)
+        for setting in settings_list:
+            root_file["scenario_set"].update(setting["scenario_set"])
+            root_file["size"] = setting["size"]
+
+        with open(storagePath + f"scenario_set.json", "w") as fp:
+            json.dump(root_file, fp, indent = 4)
+            
+        return root_file
 
 # ==============================================================================
 # -- Utility methods -----------------------------------------------------------
@@ -243,8 +292,11 @@ class ScenarioPlanner:
 
 
 if __name__ == "__main__":
+
     sp = ScenarioPlanner()
     start = time.time()
-    sp.sampleScenariosSet(3000)
+    sp.sampleScenariosSet(10000)
     run_time = ((time.time() - start) / 60) / 60
     print(f"Time elapsed: {run_time} hours")
+
+    

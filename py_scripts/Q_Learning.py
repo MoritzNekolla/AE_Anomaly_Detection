@@ -40,7 +40,7 @@ from training import EPS_START
 PREVIEW = False
 VIDEO_EVERY = 1_000
 PATH_MODEL = "model.pt"
-PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2022-12-14_00:59/"
+PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2022-12-28_23:51/"
 IM_HEIGHT = 256
 IM_WIDTH = 256
 
@@ -89,7 +89,8 @@ def main(withAE, concatAE):
 
         env.reset(settings=settings.scenario_set[f"scenario_{scenario_index}"])
         # env.spawn_anomaly_alongRoad(max_numb=20)
-        spawn_point = env.get_Vehicle_positionVec()
+        spawn_point = np.array([settings.spawn_point.location.x, settings.spawn_point.location.y, settings.spawn_point.location.z])
+        goal_point = np.array([settings.goal_point.location.x, settings.goal_point.location.y, settings.goal_point.location.z])
 
         obs_current = env.get_observation()
         obs_current = obs_current[0] #no segemntation
@@ -104,6 +105,8 @@ def main(withAE, concatAE):
         obs_current = np.array([obs_current])
         # print(obs_current.shape)
         obs_current = torch.as_tensor(obs_current)
+        img = env.createMiniMap()
+        cv2.imwrite("test.png", img)
 
         chw_list = []
 
@@ -121,7 +124,7 @@ def main(withAE, concatAE):
                 action = trainer.select_action(obs_current, 0)
             else:
                 action = trainer.select_action(obs_current, epsilon)
-            obs_next, reward, done, _ = env.step(action)
+            obs_next, reward, done, crashed = env.step(action)
             obs_next = obs_next[0] #no segemntation
 
             if concatAE:
@@ -189,10 +192,14 @@ def main(withAE, concatAE):
                     'frames': n_frame,
                     'avg_frames': np.average(frames_per_episode_list)
                 }
+                crash_scalars = {
+                    '(1=True)': crashed
+                }
                 writer.add_scalars("Reward", reward_scalars, i)
                 writer.add_scalars("Distance", dist_scalars, i)
                 writer.add_scalars("Duration", duration_scalars, i)
                 writer.add_scalars("Frame", frame_scalars, i)
+                writer.add_scalars("Crashed", crash_scalars, i)
 
                 if reward_per_episode > reward_best:
                     reward_best = reward_per_episode
