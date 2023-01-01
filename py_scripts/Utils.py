@@ -37,7 +37,7 @@ def get_image_paths(path, filter="*"):
                     path_list.append(path)
     return path_list
 
-# takes in a figure and converts it to an image
+# takes in a figure and converts it to an image (int)
 def plotToImage(figure):
     canvas = figure.canvas
     canvas.draw()

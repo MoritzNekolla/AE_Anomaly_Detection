@@ -121,7 +121,8 @@ class ScenarioEnvironment:
 
         self.actor_list = []
         self.collision_hist = []
-        self.trajectory_list = self.loadTrajectory(settings.goal_trajectory)
+        self.trajectory_list, self.rotation, self.rotated_agent_spawn = self.loadTrajectory(settings.goal_trajectory)
+        self.xAxis_min, self.xAxis_max, self.yAxis_min, self.yAxis_max = self.setAxis()
 
         # Spawn vehicle
         a_location = carla.Location(self.settings.agent.spawn_point.location.x, self.settings.agent.spawn_point.location.y, self.settings.agent.spawn_point.location.z)
@@ -274,29 +275,6 @@ class ScenarioEnvironment:
         
     #     self.world.debug.draw_point(wp.transform.location, size=0.05, life_time=-1., color=carla.Color(r=0, g=0, b=255))
 
-    # load the regular waypoint trajectory from the settings file. (not a route that avoids the anomaly)
-    def loadTrajectory(self, goal_trajectory):
-        trajectory = []
-        for x in range(len(goal_trajectory)):
-            point = goal_trajectory["waypoint{x}"]
-            point = np.array([point.x, point.y, point.z])
-            trajectory.append(point)
-        
-        return np.array(trajectory)
-
-    def createMiniMap(self):
-        p_agent = self.get_Vehicle_positionVec()
-        p_goal = self.goalPoint.location
-
-        plt.style.use('dark_background')
-        fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
-        plt.axis("off")
-        plt.plot(self.trajectory_list[:,0], self.trajectory_list[:,1], color="white", lw=3)
-        plt.plot(p_agent[0], p_agent[1], color="blue", marker='o', markersize=12)
-        plt.plot(p_goal.x, p_goal.y, color="red", marker='o', markersize=12)
-
-        miniMap = plotToImage(fig)
-        return miniMap
 
     #Returns only the waypoints in one lane
     def single_lane(self, waypoint_list, lane):
@@ -317,6 +295,102 @@ class ScenarioEnvironment:
     def setAutoPilot(self, value):
         self.autoPilotOn = value
         print(f"### Autopilot: {self.autoPilotOn}")
+
+# ==============================================================================
+# -- Minimap -------------------------------------------------------------------
+# ==============================================================================
+    def getDegree(self, root, point):
+        vec = point - root
+        length=np.linalg.norm(vec)
+        radian = 0
+        if vec[0] > 0 and vec[1] >= 0: radian=np.arctan(vec[1]/vec[0])
+        elif vec[0] > 0 and vec[1] < 0: radian=np.arctan(vec[1]/vec[0]) + 2*np.pi
+        elif vec[0] < 0: radian=np.arctan(vec[1]/vec[0]) + np.pi
+        elif vec[0] == 0 and vec[1] > 0: radian=np.pi / 2
+        elif vec[0] == 0 and vec[1] < 0: radian=3*np.pi / 2
+        degree = (180/np.pi) * radian
+        diff = degree - 90
+        result = 90/(180/np.pi)
+        rotated_point = np.array([length*math.cos(result),length*math.sin(result)])
+        rotated_point = rotated_point + root
+        return rotated_point, diff
+
+    def rotate(self, root, point, rotation):
+        vec = point - root
+        length=np.linalg.norm(vec)
+        radian = 0
+        if vec[0] > 0 and vec[1] >= 0: radian=np.arctan(vec[1]/vec[0])
+        elif vec[0] > 0 and vec[1] < 0: radian=np.arctan(vec[1]/vec[0]) + 2*np.pi
+        elif vec[0] < 0: radian=np.arctan(vec[1]/vec[0]) + np.pi
+        elif vec[0] == 0 and vec[1] > 0: radian=np.pi / 2
+        elif vec[0] == 0 and vec[1] < 0: radian=3*np.pi / 2
+        degree = (180/np.pi) * radian
+        result = degree - rotation
+        result = result/(180/np.pi)
+        rotated_point = np.array([length*math.cos(result),length*math.sin(result)])
+        rotated_point = rotated_point + root
+        return rotated_point
+
+    # load the regular waypoint trajectory from the settings file. (not a route that avoids the anomaly)
+    def loadTrajectory(self, goal_trajectory):
+        trajectory = []
+        for x in range(len(goal_trajectory)):
+            point = goal_trajectory[f"waypoint{x}"]
+            point = np.array([point.x, point.y])
+            trajectory.append(point)
+        
+        trajectory = np.array(trajectory)
+
+        # rotate to ensure facing to the west
+        p_agent = trajectory[0] # start and goal are contained in the waypoint list
+        second_point, rotation = self.getDegree(p_agent, trajectory[1])
+        trajectory_new = [p_agent, second_point]
+        for point in trajectory[2:]:
+            rotatet_point = self.rotate(p_agent, point, rotation)
+            trajectory_new.append(rotatet_point)
+
+        trajectory_new = np.array(trajectory_new)
+        return trajectory_new, rotation, p_agent
+
+    def createMiniMap(self):
+        p_agent = self.get_Vehicle_positionVec()[:2]
+        p_agent = self.rotate(self.rotated_agent_spawn, p_agent, self.rotation)
+
+        plt.style.use('dark_background')
+        fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
+        plt.axis("off")
+        plt.plot(self.trajectory_list[:,0], self.trajectory_list[:,1], color="white", lw=3)
+        plt.plot(p_agent[0], p_agent[1], color="blue", marker='o', markersize=12)
+        plt.plot(self.trajectory_list[-1][0], self.trajectory_list[-1][1], color="red", marker='o', markersize=12)
+
+        # set axis so that car starts in the middle
+        plt.xlim(self.xAxis_min, self.xAxis_max)
+        plt.ylim(self.yAxis_min, self.yAxis_max)
+
+        miniMap = plotToImage(fig)
+        plt.close()
+        return miniMap.astype("float32") / 255
+
+    # set axis so that car starts in the middle
+    def setAxis(self):
+        x_minimum = min(self.trajectory_list[:,0])
+        x_maximum = max(self.trajectory_list[:,0])
+        x_dist_min = abs(self.rotated_agent_spawn[0] - x_minimum)
+        x_dist_max = abs(self.rotated_agent_spawn[0] - x_maximum)
+        if x_dist_min < 1.:
+            x_minimum = self.rotated_agent_spawn[0] - 1
+            x_dist_min = 1.
+        if x_dist_max < 1.:
+            x_maximum = self.rotated_agent_spawn[0] + 1
+            x_dist_max = 1
+        if x_dist_max > x_dist_min:
+            x_end = x_maximum
+            x_start = self.rotated_agent_spawn[0] - x_dist_max
+        else:
+            x_start = x_minimum
+            x_end = self.rotated_agent_spawn[0] + x_dist_min
+        
+        return x_start - 0.5, x_end + 0.5, min(self.trajectory_list[:,1])-3, max(self.trajectory_list[:,1])+3
         
 # ==============================================================================
 # -- Getter --------------------------------------------------------------------

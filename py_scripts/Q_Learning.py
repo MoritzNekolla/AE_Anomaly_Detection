@@ -66,7 +66,7 @@ def main(withAE, concatAE):
 #     env = Environment(host="tks-fly.fzi.de", port=2000)
     #env = ScenarioEnvironment(world="Town01_Opt", host="localhost", port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130, random_spawn=False)
     settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
-    env = ScenarioEnvironment(world=settings.world, host='localhost', port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+    env = ScenarioEnvironment(world=settings.world, host='localhost', port=2000, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
@@ -87,12 +87,14 @@ def main(withAE, concatAE):
         start = time.time()
         n_frame = 1
 
-        env.reset(settings=settings.scenario_set[f"scenario_{scenario_index}"])
+        scenario = settings.scenario_set[f"scenario_{scenario_index}"] # select new scenario
+        env.reset(settings=scenario)
         # env.spawn_anomaly_alongRoad(max_numb=20)
-        spawn_point = np.array([settings.spawn_point.location.x, settings.spawn_point.location.y, settings.spawn_point.location.z])
-        goal_point = np.array([settings.goal_point.location.x, settings.goal_point.location.y, settings.goal_point.location.z])
+        spawn_point = np.array([scenario.agent.spawn_point.location.x, scenario.agent.spawn_point.location.y, scenario.agent.spawn_point.location.z])
+        goal_point = np.array([scenario.goal_point.location.x, scenario.goal_point.location.y, scenario.goal_point.location.z])
 
         obs_current = env.get_observation()
+        minimap = env.createMiniMap()
         obs_current = obs_current[0] #no segemntation
 
         if concatAE:
@@ -101,20 +103,17 @@ def main(withAE, concatAE):
 
         
         obs_current = np.transpose(obs_current, (2,1,0))
-        if concatAE: obs_current = np.array([obs_current, heatMap])
+        minimap = np.transpose(minimap, (2,1,0))
+        # add heat and minimap
+        if concatAE: obs_current = np.array([obs_current, heatMap, minimap])
+        else : obs_current = np.array([obs_current, minimap])
+        # batch shape
         obs_current = np.array([obs_current])
-        # print(obs_current.shape)
         obs_current = torch.as_tensor(obs_current)
-        img = env.createMiniMap()
-        cv2.imwrite("test.png", img)
 
         chw_list = []
 
         while True:
-            if PREVIEW:
-                cv2.imshow("", env.observation)
-                cv2.waitKey(1)
-
 #             chw = obs_current.squeeze(0)  # Remove batch information from BCHW
             chw_list.append(obs_current)
 
@@ -126,6 +125,7 @@ def main(withAE, concatAE):
                 action = trainer.select_action(obs_current, epsilon)
             obs_next, reward, done, crashed = env.step(action)
             obs_next = obs_next[0] #no segemntation
+            minimap = env.createMiniMap()
 
             if concatAE:
                 heatMap = evaluater.getHeatMap(obs_next)
@@ -156,7 +156,11 @@ def main(withAE, concatAE):
                 #     obs_next = np.hstack((obs_next, detectionMap))
 
                 obs_next = np.transpose(obs_next, (2,1,0))
-                if concatAE: obs_next = np.array([obs_next, heatMap])
+                minimap = np.transpose(minimap, (2,1,0))
+                # add minimap
+                if concatAE: obs_next = np.array([obs_next, heatMap, minimap])
+                else: obs_next = np.array([obs_next, minimap])
+                # batch shape
                 obs_next = np.array([obs_next])
                 obs_next = torch.as_tensor(obs_next)
             
@@ -169,6 +173,8 @@ def main(withAE, concatAE):
             trainer.optimize(i)
 
             if done:
+                minimap = env.createMiniMap()
+                cv2.imwrite("test.png", minimap)
                 end = time.time()
                 duration = end - start
                 duration_per_episode_list.append(duration)
@@ -288,12 +294,13 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
     if concatAE:
         for stacked_img in chw_list:
             stacked_img = torch.squeeze(stacked_img)
-            stacked_img = torch.tensor_split(stacked_img, 2, dim=0)
+            stacked_img = torch.tensor_split(stacked_img, 3, dim=0)
             observation = torch.squeeze(stacked_img[0])
             detectionMap = torch.squeeze(stacked_img[1]) # shape 3,w,h
+            miniMap = torch.squeeze(stacked_img[2])
             seperator = torch.zeros((3,2,256))
             seperator[0,:,1] = 1.
-            aug_img = torch.hstack((observation, seperator, detectionMap))
+            aug_img = torch.hstack((observation, seperator, detectionMap, seperator, miniMap))
             aug_list.append(aug_img)
 
     elif withVAE:
@@ -309,6 +316,9 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
             aug_img = np.transpose(aug_img, (2,1,0)) # shape: 3,w,h
             aug_img = torch.as_tensor(np.array([aug_img]))
             aug_list.append(aug_img)
+    
+    # add minimap
+
 
     tchw_list = aug_list
     if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode

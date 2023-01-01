@@ -355,12 +355,12 @@ class Sampler:
 
         
         #4.27, 5.12
-        figure(figsize=(2.11, self.s_width / 100.), dpi=100)
-        plt.xlim(-5, ticks + 20)
-        plt.ylim(-0.01, 0.3)
+        fig = plt.figure(figsize=(2.11, self.s_width / 100.), dpi=100)
+        # plt.xlim(-5, ticks + 20)
+        # plt.ylim(-0.01, 0.3)
         plt.plot(errorScores, color="black", lw=2)
         plt.axhline(y=0.08, color='r', linestyle="solid", lw=0.75)
-        plt.title("Recon Error")
+        # plt.title("Recon Error")
         # legend_elements = [Line2D([0], [0], color='#785EF0', label='Position in ', lw=1.5),
         #                     Line2D([0], [0], color='#DC267F', label='Violation', lw=1.5)]
         # plt.legend(handles=legend_elements, loc="upper left")
