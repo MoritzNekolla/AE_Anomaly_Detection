@@ -23,6 +23,8 @@ N_ACTIONS = 9
 
 RESET_SLEEP_TIME = 1
 
+FACING_DEGREE = 90 # which direction the car is facing
+
 # ==============================================================================
 # -- Find CARLA module ---------------------------------------------------------
 # ==============================================================================
@@ -64,6 +66,7 @@ class ScenarioEnvironment:
         self.map = self.world.get_map()
         self.goalPoint = None
         self.trajectory_list = None
+        self.rotated_trajectory_list = None
 
         self.s_width = s_width
         self.s_height = s_height
@@ -121,7 +124,7 @@ class ScenarioEnvironment:
 
         self.actor_list = []
         self.collision_hist = []
-        self.trajectory_list, self.rotation, self.rotated_agent_spawn = self.loadTrajectory(settings.goal_trajectory)
+        self.rotated_trajectory_list, self.rotation, self.aget_spawn, self.trajectory_list = self.loadTrajectory(settings.goal_trajectory)
         self.xAxis_min, self.xAxis_max, self.yAxis_min, self.yAxis_max = self.setAxis()
 
         # Spawn vehicle
@@ -309,8 +312,8 @@ class ScenarioEnvironment:
         elif vec[0] == 0 and vec[1] > 0: radian=np.pi / 2
         elif vec[0] == 0 and vec[1] < 0: radian=3*np.pi / 2
         degree = (180/np.pi) * radian
-        diff = degree - 90
-        result = 90/(180/np.pi)
+        diff = degree - FACING_DEGREE
+        result = FACING_DEGREE/(180/np.pi)
         rotated_point = np.array([length*math.cos(result),length*math.sin(result)])
         rotated_point = rotated_point + root
         return rotated_point, diff
@@ -340,6 +343,9 @@ class ScenarioEnvironment:
             trajectory.append(point)
         
         trajectory = np.array(trajectory)
+        old_trajectory = trajectory
+        # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
+        trajectory[:,1] = trajectory[:,1] * (-1)
 
         # rotate to ensure facing to the west
         p_agent = trajectory[0] # start and goal are contained in the waypoint list
@@ -350,18 +356,22 @@ class ScenarioEnvironment:
             trajectory_new.append(rotatet_point)
 
         trajectory_new = np.array(trajectory_new)
-        return trajectory_new, rotation, p_agent
+        return trajectory_new, rotation, p_agent, old_trajectory
 
+    # create a total minimap
     def createMiniMap(self):
         p_agent = self.get_Vehicle_positionVec()[:2]
-        p_agent = self.rotate(self.rotated_agent_spawn, p_agent, self.rotation)
+        # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
+        p_agent[1] = p_agent[1] * (-1) 
+        p_agent = self.rotate(self.aget_spawn, p_agent, self.rotation)
+
 
         plt.style.use('dark_background')
         fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
         plt.axis("off")
-        plt.plot(self.trajectory_list[:,0], self.trajectory_list[:,1], color="white", lw=3)
-        plt.plot(p_agent[0], p_agent[1], color="blue", marker='o', markersize=12)
-        plt.plot(self.trajectory_list[-1][0], self.trajectory_list[-1][1], color="red", marker='o', markersize=12)
+        plt.plot(self.rotated_trajectory_list[:,0], self.rotated_trajectory_list[:,1], color="white", lw=3)
+        plt.plot(p_agent[0], p_agent[1], color="blue", marker='<', markersize=12)
+        plt.plot(self.rotated_trajectory_list[-1][0], self.rotated_trajectory_list[-1][1], color="red", marker='o', markersize=12)
 
         # set axis so that car starts in the middle
         plt.xlim(self.xAxis_min, self.xAxis_max)
@@ -371,26 +381,49 @@ class ScenarioEnvironment:
         plt.close()
         return miniMap.astype("float32") / 255
 
+    #     # create a total minimap
+    # def createMiniMap(self):
+    #     p_agent = self.get_Vehicle_positionVec()[:2]
+    #     agetn_transform = self.get_Vehicle_transform()
+    #     fwdVector = agetn_transform.rotation.get_forward_vector()
+
+
+
+    #     plt.style.use('dark_background')
+    #     fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
+    #     plt.axis("off")
+    #     plt.plot(self.trajectory_list[:,0], self.trajectory_list[:,1], color="white", lw=3)
+    #     plt.plot(p_agent[0], p_agent[1], color="blue", marker='<', markersize=12)
+    #     plt.plot(self.trajectory_list[-1][0], self.trajectory_list[-1][1], color="red", marker='o', markersize=12)
+
+    #     # set axis so that car starts in the middle
+    #     plt.xlim(self.xAxis_min, self.xAxis_max)
+    #     plt.ylim(self.yAxis_min, self.yAxis_max)
+
+    #     miniMap = plotToImage(fig)
+    #     plt.close()
+    #     return miniMap.astype("float32") / 255
+
     # set axis so that car starts in the middle
     def setAxis(self):
         x_minimum = min(self.trajectory_list[:,0])
         x_maximum = max(self.trajectory_list[:,0])
-        x_dist_min = abs(self.rotated_agent_spawn[0] - x_minimum)
-        x_dist_max = abs(self.rotated_agent_spawn[0] - x_maximum)
-        if x_dist_min < 1.:
-            x_minimum = self.rotated_agent_spawn[0] - 1
-            x_dist_min = 1.
-        if x_dist_max < 1.:
-            x_maximum = self.rotated_agent_spawn[0] + 1
-            x_dist_max = 1
+        x_dist_min = abs(self.aget_spawn[0] - x_minimum)
+        x_dist_max = abs(self.aget_spawn[0] - x_maximum)
+        if x_dist_min < 2.:
+            x_minimum = self.aget_spawn[0] - 2
+            x_dist_min = 2.
+        if x_dist_max < 2.:
+            x_maximum = self.aget_spawn[0] + 2
+            x_dist_max = 2
         if x_dist_max > x_dist_min:
             x_end = x_maximum
-            x_start = self.rotated_agent_spawn[0] - x_dist_max
+            x_start = self.aget_spawn[0] - x_dist_max
         else:
             x_start = x_minimum
-            x_end = self.rotated_agent_spawn[0] + x_dist_min
+            x_end = self.aget_spawn[0] + x_dist_min
         
-        return x_start - 0.5, x_end + 0.5, min(self.trajectory_list[:,1])-3, max(self.trajectory_list[:,1])+3
+        return x_start - 5.5, x_end + 5.5, min(self.trajectory_list[:,1])-3, max(self.trajectory_list[:,1])+3
         
 # ==============================================================================
 # -- Getter --------------------------------------------------------------------

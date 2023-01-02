@@ -99,11 +99,11 @@ def main(withAE, concatAE):
 
         if concatAE:
             heatMap = evaluater.getHeatMap(obs_current)
-            heatMap = np.transpose(heatMap, (2,1,0))
+            heatMap = np.transpose(heatMap, (2,0,1))
 
         
-        obs_current = np.transpose(obs_current, (2,1,0))
-        minimap = np.transpose(minimap, (2,1,0))
+        obs_current = np.transpose(obs_current, (2,0,1))
+        minimap = np.transpose(minimap, (2,0,1))
         # add heat and minimap
         if concatAE: obs_current = np.array([obs_current, heatMap, minimap])
         else : obs_current = np.array([obs_current, minimap])
@@ -126,10 +126,12 @@ def main(withAE, concatAE):
             obs_next, reward, done, crashed = env.step(action)
             obs_next = obs_next[0] #no segemntation
             minimap = env.createMiniMap()
+            cv2.imwrite("test.png", minimap)
+            cv2.imwrite("test1.png", obs_next)
 
             if concatAE:
                 heatMap = evaluater.getHeatMap(obs_next)
-                heatMap = np.transpose(heatMap, (2,1,0))
+                heatMap = np.transpose(heatMap, (2,0,1))
 
             if withAE and not concatAE:
                 detectionMap = evaluater.getDetectionMap(obs_next)
@@ -155,8 +157,8 @@ def main(withAE, concatAE):
                 #     detectionMap = evaluater.getheatMap(obs_next)
                 #     obs_next = np.hstack((obs_next, detectionMap))
 
-                obs_next = np.transpose(obs_next, (2,1,0))
-                minimap = np.transpose(minimap, (2,1,0))
+                obs_next = np.transpose(obs_next, (2,0,1))
+                minimap = np.transpose(minimap, (2,0,1))
                 # add minimap
                 if concatAE: obs_next = np.array([obs_next, heatMap, minimap])
                 else: obs_next = np.array([obs_next, minimap])
@@ -173,8 +175,6 @@ def main(withAE, concatAE):
             trainer.optimize(i)
 
             if done:
-                minimap = env.createMiniMap()
-                cv2.imwrite("test.png", minimap)
                 end = time.time()
                 duration = end - start
                 duration_per_episode_list.append(duration)
