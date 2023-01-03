@@ -19,11 +19,16 @@ IM_HEIGHT = 256
 
 BEV_DISTANCE = 20
 
+EPISODE_TIME = 30
 N_ACTIONS = 9
 
 RESET_SLEEP_TIME = 1
 
 FACING_DEGREE = 90 # which direction the car is facing
+
+FIXED_DELTA_SECONDS = 0.05
+SUBSTE_DELTA = 0.007
+MAX_SUBSTEPS = 10
 
 # ==============================================================================
 # -- Find CARLA module ---------------------------------------------------------
@@ -53,10 +58,6 @@ class ScenarioEnvironment:
         self.client = carla.Client(host, port)            #Connect to server
         self.client.set_timeout(30.0)
 
-        # traffic_manager = self.client.get_trafficmanager(port)
-        # traffic_manager.set_global_distance_to_leading_vehicle(2.5)
-        # traffic_manager.set_respawn_dormant_vehicles(True)
-        # traffic_manager.set_synchronous_mode(True)
 
         self.autoPilotOn = False
 
@@ -84,6 +85,21 @@ class ScenarioEnvironment:
 
         self.settings = None
         self.time_start = None
+
+        # Synchronous mode + fixed time-step. The client will rule the simulation. The time step will be fixed. 
+        # The server will not compute the following step until the client sends a tick. This is the best mode when synchrony and precision is relevant. 
+        # Especially when dealing with slow clients or different elements retrieving information.
+        w_settings = self.world.get_settings()
+        w_settings.synchronous_mode = True
+        w_settings.fixed_delta_seconds = FIXED_DELTA_SECONDS # 10 fps | fixed_delta_seconds <= max_substep_delta_time * max_substeps
+        w_settings.substepping = True
+        w_settings.max_substep_delta_time = SUBSTE_DELTA
+        w_settings.max_substeps = MAX_SUBSTEPS
+        self.world.apply_settings(w_settings)
+        self.fps_counter = 0
+        self.max_fps = int(1/FIXED_DELTA_SECONDS) * EPISODE_TIME
+
+        print(f"~~~~~~~~~~~~~~\n## Simulator settings ##\nFrames: {int(1/FIXED_DELTA_SECONDS)}\nSubstep_delta: {SUBSTE_DELTA}\nMax_substeps: {MAX_SUBSTEPS}\n~~~~~~~~~~~~~~")
 
 
     def init_ego(self, car_type):
@@ -124,7 +140,7 @@ class ScenarioEnvironment:
 
         self.actor_list = []
         self.collision_hist = []
-        self.rotated_trajectory_list, self.rotation, self.aget_spawn, self.trajectory_list = self.loadTrajectory(settings.goal_trajectory)
+        self.rotated_trajectory_list, self.rotation, self.roateted_agent_spawn, self.trajectory_list = self.loadTrajectory(settings.goal_trajectory)
         self.xAxis_min, self.xAxis_max, self.yAxis_min, self.yAxis_max = self.setAxis()
 
         # Spawn vehicle
@@ -160,6 +176,8 @@ class ScenarioEnvironment:
         # select goal_point according to settings
         self.set_goalPoint()
 
+        self.tick_world(times=5)
+        self.fps_counter = 0
         time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 
         self.episode_start = time.time()
@@ -187,7 +205,7 @@ class ScenarioEnvironment:
             self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
 
         # Get time
-        run_time = time.time() - self.time_start
+        run_time = self.fps_counter * FIXED_DELTA_SECONDS
         # Get goal distance
         goal_distance = self.goalPoint.distance(self.get_Vehicle_transform().location)
         # Get velocity of vehicle
@@ -198,24 +216,29 @@ class ScenarioEnvironment:
         done = False
         reward_collision = 0
         crashed = 0
+        succeed = 0
+
         if len(self.collision_hist) != 0:
             done = True
-            reward_collision = -10
+            reward_collision = -100
             crashed = 1
+
         # elif v_kmh < 20:
         #     reward = v_kmh / (80 - 3*v_kmh)
         # else:
         #     reward = 1
 
-        reward_time = 30 - run_time
-        reward_distance = self.settings.euc_distance - goal_distance
+        reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
+        reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
-        reward_total = reward_time + reward_distance + reward_collision
-        if goal_distance < 1.:
+        reward_total = reward_time + 2*reward_distance + reward_collision
+
+        if goal_distance < 2.:
             done = True
             reward_total = 100
+            succeed = 1
 
-        return self.get_observation(), reward_total, done, crashed
+        return self.get_observation(), reward_total, done, crashed, succeed
 
     def spawn_anomaly(self):
         # select anomaly according to settings
@@ -363,7 +386,7 @@ class ScenarioEnvironment:
         p_agent = self.get_Vehicle_positionVec()[:2]
         # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
         p_agent[1] = p_agent[1] * (-1) 
-        p_agent = self.rotate(self.aget_spawn, p_agent, self.rotation)
+        p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation)
 
 
         plt.style.use('dark_background')
@@ -406,24 +429,29 @@ class ScenarioEnvironment:
 
     # set axis so that car starts in the middle
     def setAxis(self):
-        x_minimum = min(self.trajectory_list[:,0])
-        x_maximum = max(self.trajectory_list[:,0])
-        x_dist_min = abs(self.aget_spawn[0] - x_minimum)
-        x_dist_max = abs(self.aget_spawn[0] - x_maximum)
+        x_minimum = min(self.rotated_trajectory_list[:,0])
+        x_maximum = max(self.rotated_trajectory_list[:,0])
+        x_dist_min = abs(self.roateted_agent_spawn[0] - x_minimum)
+        x_dist_max = abs(self.roateted_agent_spawn[0] - x_maximum)
         if x_dist_min < 2.:
-            x_minimum = self.aget_spawn[0] - 2
+            x_minimum = self.roateted_agent_spawn[0] - 2
             x_dist_min = 2.
         if x_dist_max < 2.:
-            x_maximum = self.aget_spawn[0] + 2
+            x_maximum = self.roateted_agent_spawn[0] + 2
             x_dist_max = 2
         if x_dist_max > x_dist_min:
             x_end = x_maximum
-            x_start = self.aget_spawn[0] - x_dist_max
+            x_start = self.roateted_agent_spawn[0] - x_dist_max
         else:
             x_start = x_minimum
-            x_end = self.aget_spawn[0] + x_dist_min
+            x_end = self.roateted_agent_spawn[0] + x_dist_min
         
-        return x_start - 5.5, x_end + 5.5, min(self.trajectory_list[:,1])-3, max(self.trajectory_list[:,1])+3
+        x_start = x_start - 5.5
+        x_end = x_end + 5.5
+        y_start = min(self.rotated_trajectory_list[:,1]) - 3
+        y_end = max(self.rotated_trajectory_list[:,1]) + 3
+
+        return x_start, x_end, y_start, y_end
         
 # ==============================================================================
 # -- Getter --------------------------------------------------------------------
@@ -473,9 +501,24 @@ class ScenarioEnvironment:
         position = self.vehicle.get_transform().location
         return np.array([position.x, position.y, position.z])
 
+    def getFPS_Counter(self):
+        return self.fps_counter
+
+    def isTimeExpired(self):
+        if self.fps_counter > self.max_fps:
+            return True
+        return False
+
 # ==============================================================================
 # -- Sensor processing ---------------------------------------------------------
 # ==============================================================================
+
+    # perform a/multiple world tick
+    def tick_world(self, times=1):
+        for x in range(times):
+            self.world.tick()
+            self.fps_counter += 1
+
     def get_observation(self):
         """ Observations in PyTorch format BCHW """
         frame = self.observation

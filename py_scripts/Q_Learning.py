@@ -26,6 +26,7 @@ from model_eval import Evaluater
 # from env_carla import Environment
 from ScenarioPlanner import ScenarioPlanner
 from scenario_env import ScenarioEnvironment
+from scenario_env import FIXED_DELTA_SECONDS
 
 
 from training import Training
@@ -66,7 +67,7 @@ def main(withAE, concatAE):
 #     env = Environment(host="tks-fly.fzi.de", port=2000)
     #env = ScenarioEnvironment(world="Town01_Opt", host="localhost", port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130, random_spawn=False)
     settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
-    env = ScenarioEnvironment(world=settings.world, host='localhost', port=2000, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+    env = ScenarioEnvironment(world=settings.world, host='tks-holden.fzi.de', port=2000, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
@@ -78,6 +79,7 @@ def main(withAE, concatAE):
     duration_per_episode_list = []
     travel_dist_per_episode_list = []
     frames_per_episode_list = []
+    runtime_forwardpass_list = []
     spawn_point = None
     end_point = None
 
@@ -112,8 +114,10 @@ def main(withAE, concatAE):
         obs_current = torch.as_tensor(obs_current)
 
         chw_list = []
+        r_fwd_list = []
 
         while True:
+            fwdPass = time.time()
 #             chw = obs_current.squeeze(0)  # Remove batch information from BCHW
             chw_list.append(obs_current)
 
@@ -123,11 +127,11 @@ def main(withAE, concatAE):
                 action = trainer.select_action(obs_current, 0)
             else:
                 action = trainer.select_action(obs_current, epsilon)
-            obs_next, reward, done, crashed = env.step(action)
+
+            env.tick_world()
+            obs_next, reward, done, crashed, succeed = env.step(action)
             obs_next = obs_next[0] #no segemntation
             minimap = env.createMiniMap()
-            cv2.imwrite("test.png", minimap)
-            cv2.imwrite("test1.png", obs_next)
 
             if concatAE:
                 heatMap = evaluater.getHeatMap(obs_next)
@@ -142,9 +146,7 @@ def main(withAE, concatAE):
             reward_per_episode += reward
             reward_torch = torch.tensor([reward], device=device)  # For compatibility with PyTorch
 
-            if (
-                time.time() - start
-            ) > 30:  # Since the agent can simply stand now, the episode should terminate after 30 seconds
+            if env.isTimeExpired():  # Since the agent can simply stand now, the episode should terminate after a given time
                 done = True
 
             if done:
@@ -174,6 +176,10 @@ def main(withAE, concatAE):
             # Optimization on policy model (I believe this could run in parallel to the data collection task)
             trainer.optimize(i)
 
+            # calc runtime
+            runtime_end = time.time() - fwdPass
+            r_fwd_list.append(runtime_end)
+
             if done:
                 end = time.time()
                 duration = end - start
@@ -181,6 +187,7 @@ def main(withAE, concatAE):
                 travel_dist = math.dist(spawn_point, end_point)
                 travel_dist_per_episode_list.append(travel_dist)
                 frames_per_episode_list.append(n_frame)
+                runtime_forwardpass_list.append(np.average(r_fwd_list))
 
                 reward_scalars = {
                     'Reward': reward_per_episode,
@@ -199,17 +206,24 @@ def main(withAE, concatAE):
                     'avg_frames': np.average(frames_per_episode_list)
                 }
                 crash_scalars = {
-                    '(1=True)': crashed
+                    'crashed)': crashed,
+                    'succed': succeed
+                }
+                runtime_scalars = {
+                    'avg': np.average(runtime_forwardpass_list),
+                    'runtime': np.average(r_fwd_list)
                 }
                 writer.add_scalars("Reward", reward_scalars, i)
                 writer.add_scalars("Distance", dist_scalars, i)
                 writer.add_scalars("Duration", duration_scalars, i)
                 writer.add_scalars("Frame", frame_scalars, i)
-                writer.add_scalars("Crashed", crash_scalars, i)
+                writer.add_scalars("Crashed_Succed", crash_scalars, i)
+                # writer.add_scalars("Succeed", succeed_scalars, i)
+                writer.add_scalars("Runtime_per_forward_pass", runtime_scalars, i)
 
                 if reward_per_episode > reward_best:
                     reward_best = reward_per_episode
-                    name = "DQN Champ: "
+                    name = f"Best | Scenario_{scenario_index}: "
                     save_video(chw_list, reward_best, i, writer, withAE, concatAE, name)
                     # tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
                     # tchw_list = torch.squeeze(tchw_list)
@@ -297,39 +311,53 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
             stacked_img = torch.tensor_split(stacked_img, 3, dim=0)
             observation = torch.squeeze(stacked_img[0])
             detectionMap = torch.squeeze(stacked_img[1]) # shape 3,w,h
-            miniMap = torch.squeeze(stacked_img[2])
+            miniMap = torch.squeeze(stacked_img[2]) # add minimap
             seperator = torch.zeros((3,2,256))
             seperator[0,:,1] = 1.
             aug_img = torch.hstack((observation, seperator, detectionMap, seperator, miniMap))
             aug_list.append(aug_img)
 
     elif withVAE:
-        for img in chw_list:
+        for stacked_img in chw_list:
+            stacked_img = torch.squeeze(stacked_img)
+            stacked_img = torch.tensor_split(stacked_img, 2, dim=0)
+            miniMap = torch.squeeze(stacked_img[1]) # add minimap
+            img = stacked_img[0]
             img = img.numpy()
             img = np.squeeze(img)
-            img = np.transpose(img, (2,1,0)) # shape: w,h,3
+            img = np.transpose(img, (2,0,1)) # shape: w,h,3
             detectionMap = evaluater.getColoredDetectionMap(img)
             detectionMap = color_pixel(detectionMap)
             seperator = np.zeros((256,2,3))
             seperator[:,:,0] = 1.
             aug_img = np.hstack((img, seperator, detectionMap))
-            aug_img = np.transpose(aug_img, (2,1,0)) # shape: 3,w,h
+            aug_img = np.transpose(aug_img, (2,0,1)) # shape: 3,w,h
+            aug_img = np.hstack((aug_img, seperator, miniMap))
             aug_img = torch.as_tensor(np.array([aug_img]))
             aug_list.append(aug_img)
-    
-    # add minimap
+    else: # baseline
+        for stacked_img in chw_list:
+            stacked_img = torch.squeeze(stacked_img)
+            stacked_img = torch.tensor_split(stacked_img, 2, dim=0)
+            observation = torch.squeeze(stacked_img[0])
+            miniMap = torch.squeeze(stacked_img[1]) # add minimap
+            seperator = np.zeros((3,2,256))
+            seperator[:,:,0] = 1.
+            seperator = torch.as_tensor(seperator)
+            aug_img =  torch.hstack((observation, seperator, miniMap))
+            aug_list.append(aug_img)
 
 
-    tchw_list = aug_list
-    if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode
+    # tchw_list = aug_list
+    # if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode
     
-    tchw_list = torch.stack(tchw_list)  # Adds "list" like entry --> TCHW
+    tchw_list = torch.stack(aug_list)  # Adds "list" like entry --> TCHW
     tchw_list = torch.squeeze(tchw_list)
     tchw_list = tchw_list.unsqueeze(0)
     # print(tchw_list.size())
     name = name + str(reward_best)
     writer.add_video(
-        tag=name, vid_tensor=tchw_list, global_step=step
+        tag=name, vid_tensor=tchw_list, global_step=step, fps=int(1/FIXED_DELTA_SECONDS),
     )  # Unsqueeze adds batch --> BTCHW
 
 def color_pixel(img):
@@ -383,6 +411,15 @@ def init_clearML(withAE, concatAE):
             docker_setup_bash_script="apt-get update && apt-get install -y python3-opencv",
             docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all"  # --ipc=host",   
             )
+    
+    parameters = {
+        "scenario_path": PATH_SCENARIOS
+
+    }
+    #start ClearML logging
+    task.connect(parameters)
+    logger = task.get_logger()
+    task.execute_remotely('rtx3090', clone=False, exit_process=True) 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
