@@ -423,11 +423,11 @@ def init_clearML(withAE, concatAE, clearmlOn):
     else: name = name + "Baseline"
 
     task = Task.init(project_name="bogdoll/Anomaly_detection_Moritz", task_name=name, output_uri="s3://tks-zx.fzi.de:9000/clearml")
-    task.set_base_docker(
-            "nvcr.io/nvidia/pytorch:21.10-py3", 
-            docker_setup_bash_script="apt-get update && apt-get install -y python3-opencv",
-            docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all"  # --ipc=host",   
-            )
+    # task.set_base_docker(
+    #         "nvcr.io/nvidia/pytorch:21.10-py3", 
+    #         docker_setup_bash_script="apt-get update && apt-get install -y python3-opencv",
+    #         docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all"  # --ipc=host",   
+    #         )
     
     parameters = {
         "scenario_path": PATH_SCENARIOS
