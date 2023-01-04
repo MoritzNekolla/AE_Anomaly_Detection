@@ -18,7 +18,7 @@ from tempfile import gettempdir
 
 from torch.utils.tensorboard import SummaryWriter
 
-from clearml import Task
+from clearml import Task, Dataset
 
 from AE_model import AutoEncoder
 from model_eval import Evaluater
@@ -41,7 +41,9 @@ from training import EPS_START
 PREVIEW = False
 VIDEO_EVERY = 1_000
 PATH_MODEL = "model.pt"
+CLEARML_PATH_MODEL = "63619a3288814018b59c701a6a87039b"
 PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2022-12-28_23:51/"
+CLEARML_PATH_SCENARIOS = "3fbcdabc45354763af228524867c0c73"
 IM_HEIGHT = 256
 IM_WIDTH = 256
 
@@ -50,23 +52,38 @@ EGO_Y = 128
 
 evaluater = None
 
-def main(withAE, concatAE):
-    init_clearML(withAE, concatAE)
+def main(withAE, concatAE, clearmlOn):
+    task = init_clearML(withAE, concatAE, clearmlOn)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cpu": print("!!! device is CPU !!!")
 
     if withAE:
         ae_model = AutoEncoder()
-        evaluater = Evaluater(ae_model, device, PATH_MODEL)
+
+        if clearmlOn:
+            path = Dataset.get(dataset_id=CLEARML_PATH_MODEL).get_local_copy()
+            ae_model.to(device)
+            ae_model.load_state_dict(torch.load(path + "/model.pt"))
+            evaluater = Evaluater(ae_model, device)
+        else:
+            ae_model.to(device)
+            ae_model.load_state_dict(torch.load(PATH_MODEL))
+            evaluater = Evaluater(ae_model, device)
+
 
     if withAE and not concatAE:
         DISTANCE_MATRIX = init_distance_matrices(EGO_X,EGO_Y)
         print(DISTANCE_MATRIX)
 
     writer = SummaryWriter()
-#     env = Environment(host="tks-fly.fzi.de", port=2000)
+    # env = ScenarioEnvironment(host="tks-fly.fzi.de", port=2000)
     #env = ScenarioEnvironment(world="Town01_Opt", host="localhost", port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130, random_spawn=False)
-    settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
+    if clearmlOn:
+        path = Dataset.get(dataset_id=CLEARML_PATH_SCENARIOS).get_local_copy()
+        settings = ScenarioPlanner.load_settings(path)
+    else:
+        settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
+
     env = ScenarioEnvironment(world=settings.world, host='tks-holden.fzi.de', port=2000, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
@@ -399,7 +416,7 @@ def color_pixel(img):
 
     return img
 
-def init_clearML(withAE, concatAE):
+def init_clearML(withAE, concatAE, clearmlOn):
     name = "RL-"
     if concatAE: name = name + "Obs+Anomaly"
     elif withAE: name = name + "RichReward"
@@ -419,14 +436,19 @@ def init_clearML(withAE, concatAE):
     #start ClearML logging
     task.connect(parameters)
     logger = task.get_logger()
-    task.execute_remotely('rtx3090', clone=False, exit_process=True) 
+    if clearmlOn:
+        task.execute_remotely('rtx3090', clone=False, exit_process=True) 
+
+    return task
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str)
+    parser.add_argument("--clearml", type=str, default=0)
 
     args = parser.parse_args()
     mode = args.mode
+    clearml = args.clearml
 
     if mode == "0":
         withAE = False
@@ -444,5 +466,11 @@ if __name__ == "__main__":
     else:
         print("!!! Wrong mode flag. (0 = Baseline | 1 = Enriched Reward | 2 = Observation + Anomaly)")
 
-
-    main(withAE, concatAE)
+    if clearml == "0":
+        clearmlOn = False
+    elif clearml == "1":
+        clearmlOn = True
+    else:
+        print("!!! Wrong clearml flag. (0 = False | 1 = True)")
+        
+    main(withAE, concatAE, clearmlOn)

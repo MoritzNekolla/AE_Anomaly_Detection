@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpllimg
 from matplotlib.pyplot import figure
 from Image_Sampler import Sampler
+from clearml import Dataset, InputModel
 import cv2
 
 
@@ -23,11 +24,17 @@ import torch
 
 
 class Evaluater:
+    ## should be the favoured constructor
+    # def __init__(self, model, device, path):
+    #     self.model = model
+    #     self.model.to(device)
+    #     self.model.load_state_dict(torch.load(path))
+    #     self.model.eval()
+    #     self.device = device
+    #     if self.device == "cpu": print("!= Warning: Device == CPU --> slow runtime =!")
 
-    def __init__(self, model, device, path):
+    def __init__(self, model, device):
         self.model = model
-        self.model.to(device)
-        self.model.load_state_dict(torch.load(path))
         self.model.eval()
         self.device = device
         if self.device == "cpu": print("!= Warning: Device == CPU --> slow runtime =!")

@@ -242,7 +242,7 @@ class ScenarioPlanner:
     # returns settings as dict
     @staticmethod
     def load_settings(path):
-        with open(path+'scenario_set.json') as json_file:
+        with open(path+'/scenario_set.json') as json_file:
             settings = json.load(json_file)
             # convert to a dictionary that supports attribute-style access, a la JavaScript
             settings = DefaultMunch.fromDict(settings)
