@@ -73,9 +73,6 @@ guard = int(parameters["epoch"] / 10)
 if guard == 0: guard = 1
 
 
-# In[ ]:
-
-
 print("Loading data...")
 train_root = Dataset.get(dataset_id=TRAIN_ID).get_local_copy()
 train_data = Sampler.load_Images(train_root).astype("float32") / 255
@@ -90,15 +87,10 @@ parameters["train_data"] = train_data.shape
 parameters["test_data"] = test_data.shape
 
 
-# In[ ]:
-
-
 #start ClearML logging
 task.connect(parameters)
 logger = task.get_logger()
 
-
-# In[ ]:
 
 
 ## transpose images
@@ -115,8 +107,6 @@ def transpose_img(data):
 train_data = torch.as_tensor(transpose_img(train_data))
 test_data = torch.as_tensor(transpose_img(test_data))
 
-
-# In[ ]:
 
 
 # # NUR für Simon data

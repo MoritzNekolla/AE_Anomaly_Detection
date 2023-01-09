@@ -19,8 +19,6 @@ from PIL import Image
 
 import torch
 
-from env_carla import Environment
-
 
 # returns all absolute paths in #paths
 def get_image_paths(path, filter="*"):

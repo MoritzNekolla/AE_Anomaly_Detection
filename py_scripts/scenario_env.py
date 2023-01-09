@@ -53,7 +53,8 @@ import carla
 
 class ScenarioEnvironment:
 
-    def __init__(self, world=None, host='localhost', port=2000, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=BEV_DISTANCE, cam_rotation=-90, cam_zoom=110, cam_x_offset=10.):
+    def __init__(self, world=None, host='localhost', port=2000, s_width=IM_WIDTH, s_height=IM_HEIGHT,
+                 cam_height=BEV_DISTANCE, cam_rotation=-90, cam_zoom=110, cam_x_offset=10.):
         weak_self = weakref.ref(self)
         self.client = carla.Client(host, port)            #Connect to server
         self.client.set_timeout(30.0)
@@ -146,6 +147,7 @@ class ScenarioEnvironment:
         # Spawn vehicle
         a_location = carla.Location(self.settings.agent.spawn_point.location.x, self.settings.agent.spawn_point.location.y, self.settings.agent.spawn_point.location.z)
         a_rotation = carla.Rotation(self.settings.agent.spawn_point.rotation.pitch, self.settings.agent.spawn_point.rotation.yaw, self.settings.agent.spawn_point.rotation.roll)
+        a_location.z += 0.2
         a_transform = carla.Transform(a_location, a_rotation)
 
         self.vehicle = self.world.spawn_actor(self.vehicle_bp, a_transform)
@@ -176,7 +178,7 @@ class ScenarioEnvironment:
         # select goal_point according to settings
         self.set_goalPoint()
 
-        self.tick_world(times=5)
+        self.tick_world(times=6)
         self.fps_counter = 0
         time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 

@@ -41,7 +41,7 @@ MAX_LATERAL_DISPOSITION = 3
 
 class ScenarioPlanner:
 
-    def __init__(self, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=CAM_HEIGHT, cam_rotation=ROTATION, cam_zoom=ZOOM, cam_x_offset=CAM_OFFSET, host="tks-iris.fzi.de"):
+    def __init__(self, s_width=IM_WIDTH, s_height=IM_HEIGHT, cam_height=CAM_HEIGHT, cam_rotation=ROTATION, cam_zoom=ZOOM, cam_x_offset=CAM_OFFSET, host="localhost"):
         self.s_width = s_width
         self.s_height = s_height
         self.cam_height = cam_height
@@ -56,14 +56,16 @@ class ScenarioPlanner:
 
     def generateScenario(self, env):
         env.reset()
-        anomaly_id, anomaly_transform = env.spawn_anomaly_alongRoad(max_numb=20, disposition_prob=DISPOSITION_PROB, max_lateral_disposition=MAX_LATERAL_DISPOSITION)
+        anomaly_id, anomaly_transform = env.spawn_anomaly_alongRoad(max_numb=30, disposition_prob=DISPOSITION_PROB, max_lateral_disposition=MAX_LATERAL_DISPOSITION)
 
         spawn_point_transform = env.getSpawnPoint()
-        env.set_goalPoint(max_numb=30)
+        env.set_goalPoint(max_numb=40)
         goal_point = env.getGoalPoint()
         goal_trajectory = env.getGoalTrajectory()
         s_g_distance = spawn_point_transform.location.distance(goal_point.location)
         env.plotTrajectory()
+
+        self.env.tick_world(times=10)
 
         weather = env.get_Weather()
         snapshot, _ = env.get_observation()
@@ -126,10 +128,11 @@ class ScenarioPlanner:
             "weather": weather
         }
 
+        self.env.tick_world(21) # tick a whole second to despawn debug helper
         return scenario_dict, snapshot
 
     def createEnvironment(self):
-        self.env = Environment(world=self.world, port=2000, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
+        self.env = Environment(world=self.world, port=2100, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
                             cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
         # self.env = Environment(host="tks-iris.fzi.de", port=2000)
         self.env.init_ego()

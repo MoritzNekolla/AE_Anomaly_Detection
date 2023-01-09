@@ -22,12 +22,7 @@ N_ACTIONS = 9
 
 RESET_SLEEP_TIME = 1
 
-MIN_BBOX_SIZE = 0.5
-
-EPISODE_TIME = 30
-FIXED_DELTA_SECONDS = 0.05
-SUBSTE_DELTA = 0.007
-MAX_SUBSTEPS = 10
+MIN_BBOX_SIZE = 0.26
 # ==============================================================================
 # -- Find CARLA module ---------------------------------------------------------
 # ==============================================================================
@@ -63,8 +58,6 @@ class Environment:
         # traffic_manager.set_synchronous_mode(True)
 
         self.autoPilotOn = False
-        self.tm = self.client.get_trafficmanager()
-        self.tm_port = self.tm.get_port()
         self.random_spawn = random_spawn
 
         if not world == None: self.world = self.client.load_world(world)
@@ -100,16 +93,6 @@ class Environment:
         self.world.set_weather(self.weather)
         self.vehicle = None # important
 
-        w_settings = self.world.get_settings()
-        w_settings.synchronous_mode = True
-        w_settings.fixed_delta_seconds = FIXED_DELTA_SECONDS # 10 fps | fixed_delta_seconds <= max_substep_delta_time * max_substeps
-        w_settings.substepping = True
-        w_settings.max_substep_delta_time = SUBSTE_DELTA
-        w_settings.max_substeps = MAX_SUBSTEPS
-        self.tm.set_synchronous_mode(True)
-        self.world.apply_settings(w_settings)
-        self.fps_counter = 0
-        self.max_fps = int(1/FIXED_DELTA_SECONDS) * EPISODE_TIME
 
     def init_ego(self):
 
@@ -156,9 +139,7 @@ class Environment:
         else: self.spawn_point = self.spawn_points[1]
 
         self.vehicle = self.world.spawn_actor(self.vehicle_bp, self.spawn_point)
-        if self.autoPilotOn: 
-            self.vehicle.set_autopilot(self.autoPilotOn, self.tm_port)
-
+        self.vehicle.set_autopilot(self.autoPilotOn)
         self.actor_list.append(self.vehicle)
 
         # Attach and listen to image sensor (RGB)
@@ -177,8 +158,6 @@ class Environment:
         self.actor_list.append(self.col_sensor)
         self.col_sensor.listen(lambda event: self.__process_collision_data(event))
 
-        self.tick_world(times=5)
-        self.fps_counter = 0
         time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 
         self.episode_start = time.time()
@@ -233,13 +212,13 @@ class Environment:
 
 
     def spawn_anomaly_alongRoad(self, max_numb, disposition_prob=0.5, max_lateral_disposition=3):
-        if max_numb < 8: max_numb = 8
+        if max_numb < 4: max_numb = 4
         ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
         wp_infront = [ego_map_point]
         for x in range(max_numb):
             wp_infront.append(wp_infront[-1].next(2.)[0])
 
-        wp_infront = wp_infront[6:] # prevent spawning object on top of ego_vehicle
+        wp_infront = wp_infront[3:] # prevent spawning object on top of ego_vehicle
         s_index = random.randrange(0, len(wp_infront)-2)
 
         spawn =  wp_infront[s_index]
@@ -272,17 +251,15 @@ class Environment:
 
 
     def spawn_anomaly(self, transform):
-
-        ped_blueprints = self.bp_lib.filter('static.prop.mailbox')
+        ped_blueprints = self.bp_lib.filter('static.prop.*')
         anomaly_object = random.choice(ped_blueprints)
 
-
-        player = self.world.spawn_actor(anomaly_object,transform)
-        if player == None: print("!!! No anomaly spawned !!!")
-
+        player = self.world.try_spawn_actor(anomaly_object,transform)
+        if player == None: print("!!! No actor spawned !!!")
+        print(player)
 
         self.actor_list.append(player)
-        self.anomaly_point = transform
+        self.anomaly_point = player
         return anomaly_object.id, transform
 
     def set_goalPoint(self, max_numb):
@@ -334,7 +311,7 @@ class Environment:
 
     # plots the path from spawn to goal and anomaly boundingbox
     def plotTrajectory(self):
-        lifetime=1.
+        lifetime=2.
         for x in range(len(self.trajectory_list)-1):
             w = self.trajectory_list[x]
             self.world.debug.draw_point(w.transform.location, size=0.2, life_time=lifetime, color=carla.Color(r=0, g=0, b=255))
@@ -346,18 +323,17 @@ class Environment:
         best = 100000.
         bbox = None
         for box in bounding_box_set:
-            distance = abs(box.location.distance(self.anomaly_point.location))
+            distance = box.location.distance(self.anomaly_point.get_transform().location)
             if distance < best:
                 best = distance
                 bbox = box
-
-        if bbox.extent.x < MIN_BBOX_SIZE: bbox.extent.x = MIN_BBOX_SIZE 
-        if bbox.extent.y < MIN_BBOX_SIZE: bbox.extent.y = MIN_BBOX_SIZE 
-        if bbox.extent.z < MIN_BBOX_SIZE: bbox.extent.z = MIN_BBOX_SIZE 
-
+        bbox.extent.x = MIN_BBOX_SIZE if bbox.extent.x < MIN_BBOX_SIZE else bbox.extent.x
+        bbox.extent.y = MIN_BBOX_SIZE if bbox.extent.y < MIN_BBOX_SIZE else bbox.extent.y
+        bbox.extent.z = MIN_BBOX_SIZE if bbox.extent.z < MIN_BBOX_SIZE else bbox.extent.z
 
         # self.world.debug.draw_box(carla.BoundingBox(self.anomaly_point.get_transform().location,carla.Vector3D(3.5,3.5,4)),self.anomaly_point.get_transform().rotation, 0.3, carla.Color(255,140,0,0),-1.)
-        self.world.debug.draw_box(bbox, self.anomaly_point.rotation, 0.15, carla.Color(r=0, g=0, b=0),lifetime)
+        self.world.debug.draw_box(bbox, self.anomaly_point.get_transform().rotation, 0.15, carla.Color(r=0, g=0, b=0),lifetime)
+        time.sleep(1)
 
     #Returns only the waypoints in one lane
     def single_lane(self, waypoint_list, lane):
@@ -433,20 +409,6 @@ class Environment:
 # ==============================================================================
 # -- Sensor processing ---------------------------------------------------------
 # ==============================================================================
-
-    # perform a/multiple world tick
-    def tick_world(self, times=1):
-        for x in range(times):
-            self.world.tick()
-            self.fps_counter += 1
-
-    # perform a/multiple world tick in seconds
-    def tick_Seconds_world(self, seconds=1):
-        times = int(seconds * int(1/FIXED_DELTA_SECONDS))
-        for x in range(times):
-            self.world.tick()
-            self.fps_counter += 1
-
     def get_observation(self):
         """ Observations in PyTorch format BCHW """
         frame = self.observation
@@ -490,12 +452,11 @@ class Environment:
         return tmp
     
     def deleteActors(self):
-        # if not self.vehicle == None:
-        #     self.vehicle.set_autopilot(False, self.tm_port)
+        if not self.vehicle == None:
+            self.vehicle.set_autopilot(False)
 
         for actor in self.actor_list:
-            if self.isActorAlive(actor=actor):
-                actor.destroy()       
+            actor.destroy()       
         # self.client.apply_batch([carla.command.DestroyActor(x) for x in self.actor_list])
         # for actor in self.actor_list:
         #     if self.isActorAlive(actor=actor):

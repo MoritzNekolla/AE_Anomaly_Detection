@@ -4,13 +4,13 @@
 
 from operator import truediv
 import re
-from turtle import distance
 import cv2
 import time
 import torch
 import numpy as np
 import argparse
 import math
+from matplotlib import pyplot as plt
 
 import os
 import sys
@@ -84,7 +84,7 @@ def main(withAE, concatAE, clearmlOn):
     else:
         settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
 
-    env = ScenarioEnvironment(world=settings.world, host='tks-holden.fzi.de', port=2000, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+    env = ScenarioEnvironment(world=settings.world, host='ids-imperator.fzi.de', port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
@@ -364,10 +364,12 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
             aug_img =  torch.hstack((observation, seperator, miniMap))
             aug_list.append(aug_img)
 
-
     # tchw_list = aug_list
     # if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode
-    
+    snapshot = aug_list[10].numpy()
+    snapshot = snapshot.reshape((1,0,2))
+    plt.imsave("agent_snapshot", snapshot)
+
     tchw_list = torch.stack(aug_list)  # Adds "list" like entry --> TCHW
     tchw_list = torch.squeeze(tchw_list)
     tchw_list = tchw_list.unsqueeze(0)
@@ -422,12 +424,14 @@ def init_clearML(withAE, concatAE, clearmlOn):
     elif withAE: name = name + "RichReward"
     else: name = name + "Baseline"
 
+    # Task.add_requirements("requirements.txt")
+    Task.add_requirements("moviepy", "1.0.3")
     task = Task.init(project_name="bogdoll/Anomaly_detection_Moritz", task_name=name, output_uri="s3://tks-zx.fzi.de:9000/clearml")
-    # task.set_base_docker(
-    #         "nvcr.io/nvidia/pytorch:21.10-py3", 
-    #         docker_setup_bash_script="apt-get update && apt-get install -y python3-opencv",
-    #         docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all"  # --ipc=host",   
-    #         )
+    task.set_base_docker(
+            "nvcr.io/nvidia/pytorch:21.10-py3", 
+            docker_setup_bash_script="apt-get update && apt-get install -y python3-opencv",
+            docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all"  # --ipc=host",   
+            )
     
     parameters = {
         "scenario_path": PATH_SCENARIOS

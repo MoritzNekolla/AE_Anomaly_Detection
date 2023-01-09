@@ -191,7 +191,7 @@ class Sampler:
     def sample_save_Ride(self, save_index, storagePath, world_model=None, random_spawn=True, num_of_snaps=100, tick_rate=1, random_action_prob=0.001):
         if world_model == None: world_model = MAP_SET[random.randrange(0,len(MAP_SET))]
 
-        env = Environment(world=world_model, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn)
+        env = Environment(world=world_model, port=2000, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn)
         env.init_ego()
         env.setAutoPilot(True)
         env.reset()
@@ -199,6 +199,11 @@ class Sampler:
 
         x = 0
         while x < num_of_snaps:
+            if x % 100 == 0 and not x == 0:
+                env.reset()
+                print(f"reseting env: {x}")
+                pre_position = np.array([0.,0.,0.])
+            
             self.potentialStep(env, random_action_prob)
             image,_ = env.get_observation()
             position = env.get_Vehicle_positionVec()
@@ -208,9 +213,10 @@ class Sampler:
                 cv2.imwrite(storagePath + f"snap_{save_index}.png", image) 
                 save_index += 1
                 x = x + 1
-            pre_position = np.array(position)
+                pre_position = np.array(position)
             rand_tick = random.random() * 3 + tick_rate
-            time.sleep(rand_tick)
+            env.tick_Seconds_world(rand_tick)
+            # time.sleep(rand_tick)
         
         env.deleteActors()
         return save_index
