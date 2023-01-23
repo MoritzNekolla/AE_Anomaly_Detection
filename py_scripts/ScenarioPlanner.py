@@ -31,10 +31,10 @@ CAM_HEIGHT = 20.5
 ROTATION = -70
 CAM_OFFSET = 18.
 ZOOM = 130
-ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/"
-# ROOT_STORAGE_PATH = "./scenario_sets/"
-# MAP_SET = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
-MAP_SET = ["Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt","Town01_Opt","Town01_Opt"]
+# ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/"
+ROOT_STORAGE_PATH = "./scenario_sets/"
+# MAP_SET = ["Town02_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
+MAP_SET = ["Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt","Town02_Opt","Town02_Opt"]
 
 DISPOSITION_PROB = 0.4
 MAX_LATERAL_DISPOSITION = 3
@@ -50,7 +50,7 @@ class ScenarioPlanner:
         self.cam_x_offset = cam_x_offset
         self.host = host
 
-        self.world = "Town01_Opt"
+        self.world = "Town02_Opt"
         self.createEnvironment()
 
 
@@ -154,8 +154,9 @@ class ScenarioPlanner:
             pathToSnaps = storagePath + "snapshots/"
             if not os.path.isdir(pathToSnaps):
                 os.mkdir(pathToSnaps)
-            snapshot = (snapshot * 255).astype("int")
-            cv2.imwrite(pathToSnaps + f"snap_{x}.png", snapshot)
+            plt.imsave(pathToSnaps + f"snap_{x}.png", snapshot)
+            # snapshot = (snapshot * 255).astype("int")
+            # cv2.imwrite(pathToSnaps + f"snap_{x}.png", snapshot)
             
             # save ScenarioSettings
             if (x % 10 == 0 and not x == 0):

@@ -1,3 +1,4 @@
+
 import glob
 import os
 import sys
@@ -150,9 +151,10 @@ class Environment:
         self.collision_hist = []
 
         # Spawn vehicle
-        if self.random_spawn: 
-            self.spawn_point = random.choice(self.map_waypoints).transform
-            self.spawn_point.location.z += 0.3 # prevent collision at spawn point
+        if self.random_spawn:
+            self.spawn_point = random.choice(self.spawn_points) 
+            # self.spawn_point = random.choice(self.map_waypoints).transform
+            # self.spawn_point.location.z += 0.5 # prevent collision at spawn point
         else: self.spawn_point = self.spawn_points[1]
 
         self.vehicle = self.world.spawn_actor(self.vehicle_bp, self.spawn_point)
@@ -171,6 +173,7 @@ class Environment:
         # self.actor_list.append(self.ss_cam_seg)
         # self.ss_cam_seg.listen(lambda data: self.__process_sensor_data_Seg(data))
 
+        time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 
         # Attach and listen to collision sensor
         self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
@@ -179,7 +182,6 @@ class Environment:
 
         self.tick_world(times=5)
         self.fps_counter = 0
-        time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 
         self.episode_start = time.time()
         return self.get_observation()
@@ -273,7 +275,7 @@ class Environment:
 
     def spawn_anomaly(self, transform):
 
-        ped_blueprints = self.bp_lib.filter('static.prop.mailbox')
+        ped_blueprints = self.bp_lib.filter('static.prop.*')
         anomaly_object = random.choice(ped_blueprints)
 
 

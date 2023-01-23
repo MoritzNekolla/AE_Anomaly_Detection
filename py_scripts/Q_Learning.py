@@ -84,7 +84,7 @@ def main(withAE, concatAE, clearmlOn):
     else:
         settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
 
-    env = ScenarioEnvironment(world=settings.world, host='ids-imperator.fzi.de', port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+    env = ScenarioEnvironment(world=settings.world, host='localhost', port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
@@ -329,9 +329,9 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
             observation = torch.squeeze(stacked_img[0])
             detectionMap = torch.squeeze(stacked_img[1]) # shape 3,w,h
             miniMap = torch.squeeze(stacked_img[2]) # add minimap
-            seperator = torch.zeros((3,2,256))
-            seperator[0,:,1] = 1.
-            aug_img = torch.hstack((observation, seperator, detectionMap, seperator, miniMap))
+            seperator = torch.zeros((3,256,2))
+            seperator[:,:,:] = 1.
+            aug_img = torch.cat((observation, seperator, detectionMap, seperator, miniMap), dim=2)
             aug_list.append(aug_img)
 
     elif withVAE:
@@ -346,7 +346,7 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
             detectionMap = evaluater.getColoredDetectionMap(img)
             detectionMap = color_pixel(detectionMap)
             seperator = np.zeros((256,2,3))
-            seperator[:,:,0] = 1.
+            seperator[:,:,:] = 1.
             aug_img = np.hstack((img, seperator, detectionMap))
             aug_img = np.transpose(aug_img, (2,0,1)) # shape: 3,w,h
             aug_img = np.hstack((aug_img, seperator, miniMap))
@@ -358,17 +358,19 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
             stacked_img = torch.tensor_split(stacked_img, 2, dim=0)
             observation = torch.squeeze(stacked_img[0])
             miniMap = torch.squeeze(stacked_img[1]) # add minimap
-            seperator = np.zeros((3,2,256))
-            seperator[:,:,0] = 1.
+            seperator = np.zeros((3,256,2))
+            seperator[:,:,:] = 1.
             seperator = torch.as_tensor(seperator)
-            aug_img =  torch.hstack((observation, seperator, miniMap))
+            aug_img =  torch.cat((observation, seperator, miniMap), dim=2)
             aug_list.append(aug_img)
 
     # tchw_list = aug_list
     # if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode
     snapshot = aug_list[10].numpy()
-    snapshot = snapshot.reshape((1,0,2))
-    plt.imsave("agent_snapshot", snapshot)
+    print(snapshot.shape)
+    snapshot = np.transpose(snapshot, (1,2,0))
+    print(snapshot.shape)
+    plt.imsave("agent_snapshot.png", snapshot)
 
     tchw_list = torch.stack(aug_list)  # Adds "list" like entry --> TCHW
     tchw_list = torch.squeeze(tchw_list)
