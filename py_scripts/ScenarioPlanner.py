@@ -183,7 +183,7 @@ class ScenarioPlanner:
         
         # save and delete last env
         self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, chunk_num=chunk_num)
-        self.env.deleteActors()
+        env.deleteActors()
 
         print("# Finished. Good bye")
 

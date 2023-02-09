@@ -58,7 +58,7 @@ task.execute_remotely('rtx3090', clone=False, exit_process=True)
 
 parameters = {
     "epoch" : 1000,
-    "batch_size" : 7,
+    "batch_size" : 10,
     "imgSize": 256,
     "zDim": 1024,
     "learning_rate" : 1e-05,

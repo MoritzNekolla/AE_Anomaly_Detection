@@ -42,8 +42,8 @@ PREVIEW = False
 VIDEO_EVERY = 1_000
 PATH_MODEL = "model.pt"
 CLEARML_PATH_MODEL = "63619a3288814018b59c701a6a87039b"
-PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2022-12-28_23:51/"
-CLEARML_PATH_SCENARIOS = "3fbcdabc45354763af228524867c0c73"
+PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-07_16:36"
+CLEARML_PATH_SCENARIOS = "e5570416b672479ab22aab7e883680b6"
 IM_HEIGHT = 256
 IM_WIDTH = 256
 
@@ -84,7 +84,7 @@ def main(withAE, concatAE, clearmlOn):
     else:
         settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
 
-    env = ScenarioEnvironment(world=settings.world, host='localhost', port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+    env = ScenarioEnvironment(world=settings.world, host='tks-iso.fzi.de', port=2200, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
