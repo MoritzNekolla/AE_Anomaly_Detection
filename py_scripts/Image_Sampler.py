@@ -9,6 +9,7 @@ from turtle import pos
 import numpy as np
 import math
 import time
+import traceback
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpllimg
@@ -20,7 +21,9 @@ from PIL import Image
 
 import torch
 
-from env_carla import Environment
+from env_carla_synch import Environment
+
+from clearml import Task, Dataset
 
 IM_WIDTH = 480
 IM_HEIGHT = 360
@@ -79,7 +82,7 @@ class Sampler:
     def sample(self, world_model=None, random_spawn=True):
         if world_model == None: world_model = MAP_SET[random.randrange(0,len(MAP_SET))]
 
-        env = Environment(world=world_model, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height,
+        env = Environment(world=world_model, port=2000, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height,
                          cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn, cam_x_offset=self.cam_x_offset)
         env.init_ego()
         # image, segmentation = env.reset()
@@ -176,6 +179,7 @@ class Sampler:
 # ==============================================================================
 # -- Collect huge amounts of samples (> 20k) --> save after each frame ---------
 # ==============================================================================
+
     def collect_huge_Samples(self, sample_size, tick_rate=1):
         print(f"Starting to collect {sample_size} frames out of {len(MAP_SET)} worlds...")
         storagePath = self.create_Storage()
@@ -183,44 +187,57 @@ class Sampler:
         
         image_index = 0
         for x in range(len(MAP_SET)):
-            image_index = self.sample_save_Ride(world_model=MAP_SET[x], random_spawn=True, num_of_snaps=samplesPerEnv, tick_rate=tick_rate, save_index=image_index, storagePath=storagePath)
+            image_index = self.sample_save_Ride(world_model=MAP_SET[x], port=2200, random_spawn=True, num_of_snaps=samplesPerEnv, tick_rate=tick_rate, save_index=image_index, storagePath=storagePath)
             print(f"finished world! {x}")
         
         print(f"Finished | Collected: {str(samplesPerEnv * len(MAP_SET))} samples.")
 
-    def sample_save_Ride(self, save_index, storagePath, world_model=None, random_spawn=True, num_of_snaps=100, tick_rate=1, random_action_prob=0.001):
+    def sample_save_Ride(self, port, save_index, storagePath, world_model=None, random_spawn=True, num_of_snaps=100, tick_rate=1, random_action_prob=0.001):
         if world_model == None: world_model = MAP_SET[random.randrange(0,len(MAP_SET))]
 
-        env = Environment(world=world_model, port=2100, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn)
+
+        env = self.setEnvironment(world=world_model, port=port, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn)
+        
+        pre_position = np.array([0.,0.,0.])
+        stuck_counter = 0
+        x = 0
+        while x < num_of_snaps:
+            try:
+                if (x % 300 == 0 and not x == 0) or stuck_counter > 20:
+                    env.reset()
+                    env.setAutoPilot(True)
+                    print(f"reseting env: {x}")
+                    pre_position = np.array([0.,0.,0.])
+                
+                self.potentialStep(env, random_action_prob)
+                image,_ = env.get_observation()
+                position = env.get_Vehicle_positionVec()
+                stuck_counter += 1
+                # are we waiting at a red light ? >> ignore snap
+                if Sampler.euclid_dist(pre_position, position) > .5 :
+                    image = (image * 255).astype("int")
+                    cv2.imwrite(storagePath + f"snap_{save_index}.png", image) 
+                    save_index += 1
+                    x = x + 1
+                    pre_position = np.array(position)
+                    stuck_counter = 0
+                rand_tick = random.random() * 3 + tick_rate
+                # env.tick_Seconds_world(rand_tick)
+                time.sleep(rand_tick)
+            except:
+                print(f"Some error occured!")
+                traceback.print_exc()
+                env = self.setEnvironment(world=world_model, port=port, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn)
+            
+        env.deleteActors()
+        return save_index
+
+    def setEnvironment(self, world, port, s_width, s_height, cam_height, cam_rotation, cam_zoom, host, random_spawn):
+        env = Environment(world=world, port=port, s_width=s_width, s_height=s_height, cam_height=cam_height, cam_rotation=cam_rotation, cam_zoom=cam_zoom, host=host, random_spawn=random_spawn)
         env.init_ego()
         env.setAutoPilot(True)
         env.reset()
-        pre_position = np.array([0.,0.,0.])
-
-        x = 0
-        while x < num_of_snaps:
-            if x % 200 == 0 and not x == 0:
-                env.reset()
-                env.setAutoPilot(True)
-                print(f"reseting env: {x}")
-                pre_position = np.array([0.,0.,0.])
-            
-            self.potentialStep(env, random_action_prob)
-            image,_ = env.get_observation()
-            position = env.get_Vehicle_positionVec()
-            # are we waiting at a red light ? >> ignore snap
-            if Sampler.euclid_dist(pre_position, position) > .5 :
-                image = (image * 255).astype("int")
-                cv2.imwrite(storagePath + f"snap_{save_index}.png", image) 
-                save_index += 1
-                x = x + 1
-                pre_position = np.array(position)
-            rand_tick = random.random() * 3 + tick_rate
-            # env.tick_Seconds_world(rand_tick)
-            time.sleep(rand_tick)
-        
-        env.deleteActors()
-        return save_index
+        return env
 # ==============================================================================
 # -- End of huge sample code ---------------------------------------------------
 # ==============================================================================

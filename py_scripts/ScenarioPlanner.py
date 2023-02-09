@@ -10,6 +10,7 @@ import numpy as np
 import math
 import json
 import time
+import traceback
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpllimg
@@ -21,7 +22,7 @@ from munch import DefaultMunch
 import torch
 from clearml import Task, Logger
 
-from env_carla import Environment
+from env_carla_synch import Environment
 from scenario_env import ScenarioEnvironment
 from Utils import get_image_paths
 
@@ -31,10 +32,10 @@ CAM_HEIGHT = 20.5
 ROTATION = -70
 CAM_OFFSET = 18.
 ZOOM = 130
-# ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/"
-ROOT_STORAGE_PATH = "./scenario_sets/"
-# MAP_SET = ["Town02_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
-MAP_SET = ["Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt", "Town02_Opt","Town02_Opt","Town02_Opt"]
+ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-07_16:36/"
+# ROOT_STORAGE_PATH = "./scenario_sets/"
+# MAP_SET = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
+MAP_SET = ["Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt","Town01_Opt","Town01_Opt"]
 
 DISPOSITION_PROB = 0.4
 MAX_LATERAL_DISPOSITION = 3
@@ -50,8 +51,7 @@ class ScenarioPlanner:
         self.cam_x_offset = cam_x_offset
         self.host = host
 
-        self.world = "Town02_Opt"
-        self.createEnvironment()
+        self.world = "Town01_Opt"
 
 
     def generateScenario(self, env):
@@ -65,7 +65,7 @@ class ScenarioPlanner:
         s_g_distance = spawn_point_transform.location.distance(goal_point.location)
         env.plotTrajectory()
 
-        self.env.tick_world(times=10)
+        env.tick_world(times=10)
 
         weather = env.get_Weather()
         snapshot, _ = env.get_observation()
@@ -128,25 +128,31 @@ class ScenarioPlanner:
             "weather": weather
         }
 
-        self.env.tick_world(21) # tick a whole second to despawn debug helper
+        env.tick_world(21) # tick a whole second to despawn debug helper
         return scenario_dict, snapshot
 
-    def createEnvironment(self):
-        self.env = Environment(world=self.world, port=2100, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
-                            cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
-        # self.env = Environment(host="tks-iris.fzi.de", port=2000)
-        self.env.init_ego()
+    # def createEnvironment(self):
+    #     self.env = Environment(world=self.world, port=2200, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
+    #                         cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
+    #     # self.env = Environment(host="tks-iris.fzi.de", port=2000)
+    #     self.env.init_ego()
 
     def sampleScenariosSet(self, amount):
         print(f"~~~~~~~~~~~~~~\n# Collecting {amount} scenarios among world: {self.world} \n~~~~~~~~~~~~~~")
         scenario_set = {}
         timestr = time.strftime("%Y-%m-%d_%H:%M")
-        chunk_num = 0
-        storagePath = self.create_Storage()
+        chunk_num = 921
+        # storagePath = self.create_Storage()
+        storagePath = ROOT_STORAGE_PATH
 
-        for x in range(amount):
+        env = Environment(world=self.world, port=2200, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
+                            cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
+        env.init_ego()
+
+        for x in range(9210,amount):
+
             # add to dict
-            s_dict, snapshot = self.generateScenario(self.env)
+            s_dict, snapshot = self.generateScenario(env)
             s_dict["snapshot"] = x
             scenario_set[f"scenario_{x}"] = s_dict
             
@@ -159,18 +165,21 @@ class ScenarioPlanner:
             # cv2.imwrite(pathToSnaps + f"snap_{x}.png", snapshot)
             
             # save ScenarioSettings
-            if (x % 10 == 0 and not x == 0):
+            if (x % 10 == 0 and not x == 0 and not x == 9210):
                 self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, chunk_num=chunk_num)
                 scenario_set = {}
                 chunk_num += 1
                 print(f"{x}|{amount}")
 
+            if (x % 1000 == 0 and not x == 0):
                 # destroy last env and create new
-                # self.env.deleteActors()
-                # self.createEnvironment()
+                env.deleteActors()
+                env = Environment(world=self.world, port=2200, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
+                                cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
+                env.init_ego()
 
             # sleep a second to ensure clearing of debug_helper
-            time.sleep(1)
+            # time.sleep(1)
         
         # save and delete last env
         self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, chunk_num=chunk_num)
@@ -202,13 +211,12 @@ class ScenarioPlanner:
             width = tmp.shape[0]
             height = tmp.shape[1]
             video = cv2.VideoWriter("walk.avi", 0, 1, (width ,height)) # width, height
-            for x in range(len(path_list)):
-                if x >= max_scenes: break
-                path = path_list[x]
-                video.write(cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB))
-                video.write(cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB))
-                video.write(cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB))
-                video.write(cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB))
+            for x in range(max_scenes-1):
+                path = random.choice(path_list)
+                video.write(cv2.imread(path))
+                video.write(cv2.imread(path))
+                video.write(cv2.imread(path))
+                video.write(cv2.imread(path))
             cv2.destroyAllWindows()
             return video.release()
 
@@ -303,4 +311,5 @@ if __name__ == "__main__":
     run_time = ((time.time() - start) / 60) / 60
     print(f"Time elapsed: {run_time} hours")
 
+    # ScenarioPlanner.create_final_json(ROOT_STORAGE_PATH)
     

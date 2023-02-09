@@ -1,5 +1,4 @@
 
-
 import glob
 import os
 import sys
@@ -30,24 +29,24 @@ EPISODE_TIME = 30
 FIXED_DELTA_SECONDS = 0.05
 SUBSTE_DELTA = 0.007
 MAX_SUBSTEPS = 10
-# ==============================================================================
-# -- Find CARLA module ---------------------------------------------------------
-# ==============================================================================
-try:
-    sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
-        sys.version_info.major,
-        sys.version_info.minor,
-        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
-except IndexError:
-    pass
+# # ==============================================================================
+# # -- Find CARLA module ---------------------------------------------------------
+# # ==============================================================================
+# try:
+#     sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
+#         sys.version_info.major,
+#         sys.version_info.minor,
+#         'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
+# except IndexError:
+#     pass
 
-# ==============================================================================
-# -- Add PythonAPI for release mode --------------------------------------------
-# ==============================================================================
-try:
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + '/carla')
-except IndexError:
-    pass
+# # ==============================================================================
+# # -- Add PythonAPI for release mode --------------------------------------------
+# # ==============================================================================
+# try:
+#     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + '/carla')
+# except IndexError:
+#     pass
 
 import carla
 
@@ -151,11 +150,18 @@ class Environment:
         self.actor_list = []
         self.collision_hist = []
 
+        self.tick_world(times=5)
+
         # Spawn vehicle
         if self.random_spawn:
-            self.spawn_point = random.choice(self.spawn_points) 
+            index = -1
+            while index < 0:
+                index = random.randint(0, len(self.spawn_points)-1)
+            # self.spawn_point = random.choice(self.spawn_points)
+            self.spawn_point = self.spawn_points[index]
+            print(index)
             # self.spawn_point = random.choice(self.map_waypoints).transform
-            # self.spawn_point.location.z += 0.5 # prevent collision at spawn point
+            self.spawn_point.location.z += 0.3 # prevent collision at spawn point
         else: self.spawn_point = self.spawn_points[1]
 
         self.vehicle = self.world.spawn_actor(self.vehicle_bp, self.spawn_point)
@@ -650,10 +656,13 @@ class Environment:
         
         self.actor_list = []
         self.collision_hist = []
-
         # Spawn vehicle
-        if self.random_spawn: 
-            self.spawn_point = random.choice(self.map_waypoints).transform
+        if self.random_spawn:
+            index = -1
+            while index < 0 or index == 131 or index == 16:
+                index = random.randint(0, len(self.spawn_points)-1)
+            # self.spawn_point = random.choice(self.spawn_points)
+            self.spawn_point = self.spawn_points[index]
             self.spawn_point.location.z += 0.3 # prevent collision at spawn point
         else: self.spawn_point = self.spawn_points[1]
 
