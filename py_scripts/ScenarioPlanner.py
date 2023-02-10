@@ -32,13 +32,13 @@ CAM_HEIGHT = 20.5
 ROTATION = -70
 CAM_OFFSET = 18.
 ZOOM = 130
-ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-07_16:36/"
+ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-10_13:37/"
 # ROOT_STORAGE_PATH = "./scenario_sets/"
 # MAP_SET = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
 MAP_SET = ["Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt","Town01_Opt","Town01_Opt"]
 
-DISPOSITION_PROB = 0.4
-MAX_LATERAL_DISPOSITION = 3
+DISPOSITION_PROB = 0.7
+MAX_LATERAL_DISPOSITION = 2.0
 
 class ScenarioPlanner:
 
@@ -141,7 +141,7 @@ class ScenarioPlanner:
         print(f"~~~~~~~~~~~~~~\n# Collecting {amount} scenarios among world: {self.world} \n~~~~~~~~~~~~~~")
         scenario_set = {}
         timestr = time.strftime("%Y-%m-%d_%H:%M")
-        chunk_num = 921
+        chunk_num = 4
         # storagePath = self.create_Storage()
         storagePath = ROOT_STORAGE_PATH
 
@@ -149,7 +149,7 @@ class ScenarioPlanner:
                             cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
         env.init_ego()
 
-        for x in range(9210,amount):
+        for x in range(4001,amount):
 
             # add to dict
             s_dict, snapshot = self.generateScenario(env)
@@ -165,13 +165,13 @@ class ScenarioPlanner:
             # cv2.imwrite(pathToSnaps + f"snap_{x}.png", snapshot)
             
             # save ScenarioSettings
-            if (x % 10 == 0 and not x == 0 and not x == 9210):
+            if (x % 10 == 0 and not x == 0 and not x == 0):
                 self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, chunk_num=chunk_num)
                 scenario_set = {}
                 chunk_num += 1
                 print(f"{x}|{amount}")
 
-            if (x % 1000 == 0 and not x == 0):
+            if (x % 300 == 0 and not x == 0):
                 # destroy last env and create new
                 env.deleteActors()
                 env = Environment(world=self.world, port=2200, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,

@@ -2,7 +2,7 @@
 import glob
 import os
 import sys
-
+import json
 import random
 import numpy as np
 import math
@@ -64,8 +64,8 @@ class Environment:
         # traffic_manager.set_synchronous_mode(True)
 
         self.autoPilotOn = False
-        self.tm = self.client.get_trafficmanager()
-        self.tm_port = self.tm.get_port()
+        # self.tm = self.client.get_trafficmanager()
+        # self.tm_port = self.tm.get_port()
         self.random_spawn = random_spawn
 
         if not world == None: self.world = self.client.load_world(world)
@@ -96,12 +96,14 @@ class Environment:
             precipitation=0.0,
             precipitation_deposits= 0.0,
             wind_intensity=0.0,
-            fog_density=0.0,
+            fog_density=0.0,   
             wetness=0.0,
             sun_altitude_angle=70.0)
 
         self.world.set_weather(self.weather)
         self.vehicle = None # important
+
+        self.valid_anomalys = self.set_valid_anomalys()
 
         w_settings = self.world.get_settings()
         w_settings.synchronous_mode = True
@@ -109,7 +111,7 @@ class Environment:
         w_settings.substepping = True
         w_settings.max_substep_delta_time = SUBSTE_DELTA
         w_settings.max_substeps = MAX_SUBSTEPS
-        self.tm.set_synchronous_mode(True)
+        # self.tm.set_synchronous_mode(True)
         self.world.apply_settings(w_settings)
         self.fps_counter = 0
         self.max_fps = int(1/FIXED_DELTA_SECONDS) * EPISODE_TIME
@@ -237,58 +239,103 @@ class Environment:
         self.spawn_anomaly(transform)
 
 
-    def spawn_anomaly_alongRoad(self, max_numb, disposition_prob=0.5, max_lateral_disposition=3):
-        if max_numb < 8: max_numb = 8
-        ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
-        wp_infront = [ego_map_point]
-        for x in range(max_numb):
-            wp_infront.append(wp_infront[-1].next(2.)[0])
+    def spawn_anomaly_alongRoad(self, max_numb, disposition_prob=0.7, max_lateral_disposition=2.5):
+        count = 0
+        spawn_failed = True
+        while spawn_failed:
+            if max_numb < 8: max_numb = 8
+            ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
+            wp_infront = [ego_map_point]
+            for x in range(max_numb):
+                wp_infront.append(wp_infront[-1].next(2.)[0])
 
-        wp_infront = wp_infront[6:] # prevent spawning object on top of ego_vehicle
-        s_index = random.randrange(0, len(wp_infront)-2)
+            wp_infront = wp_infront[6:] # prevent spawning object on top of ego_vehicle
+            s_index = random.randrange(0, len(wp_infront)-3)
 
-        spawn =  wp_infront[s_index]
-        spawn_location = spawn.transform.location
+            spawn =  wp_infront[s_index]
+            spawn_location = spawn.transform.location
 
-        if random.random() < disposition_prob and not spawn_location.distance(spawn.transform.location) == 0: # sometimes future waypoints are the same => no vector (weird)
-            # calc orthogonal vector
-            next_wp = wp_infront[s_index+2].transform.location
-            dir_vector = np.array([spawn_location.x - next_wp.x, spawn_location.y - next_wp.y, spawn_location.z - next_wp.z])
-            # dir_vector = dir_vector / np.linalg.norm(dir_vector) # normalize vector
-            x_axis = (-dir_vector[1] - dir_vector[2]) / dir_vector[0] # v_1*v_2 = 0  =>  x_1 = (-x_2-x_3) / y_1 ||| y_2, y_3 = 1
-            orthogonal_vector = np.array([x_axis*dir_vector[0], dir_vector[1], dir_vector[2]])
-            orthogonal_vector = orthogonal_vector / np.linalg.norm(orthogonal_vector) # normalize vector
-            # print(orthogonal_vector)
-            # print(np.linalg.norm(orthogonal_vector))
+            if random.random() < disposition_prob:# and not spawn_location.distance(spawn.transform.location) == 0: # sometimes future waypoints are the same => no vector (weird)
+                # calc orthogonal vector
+                next_wp = wp_infront[s_index+2].transform.location
+                dir_vector = np.array([spawn_location.x - next_wp.x, spawn_location.y - next_wp.y, spawn_location.z - next_wp.z])
+                # dir_vector = dir_vector / np.linalg.norm(dir_vector) # normalize vector
+                x_axis = (-dir_vector[1] - dir_vector[2]) / dir_vector[0] # v_1*v_2 = 0  =>  x_1 = (-x_2-x_3) / y_1 ||| y_2, y_3 = 1
+                orthogonal_vector = np.array([x_axis*dir_vector[0], dir_vector[1], dir_vector[2]])
+                orthogonal_vector = orthogonal_vector / np.linalg.norm(orthogonal_vector) # normalize vector
+                # print(orthogonal_vector)
+                # print(np.linalg.norm(orthogonal_vector))
 
-            # disposition
-            lateral_disposition = random.random() * max_lateral_disposition # strength of disposition
-            if random.random() < 0.5: lateral_disposition = lateral_disposition * (-1) # left or right disposition
-            orthogonal_vector = orthogonal_vector * lateral_disposition
+                # disposition
+                lateral_disposition = random.random() * max_lateral_disposition # strength of disposition
+                if random.random() < 0.5: lateral_disposition = lateral_disposition * (-1) # left or right disposition
+                orthogonal_vector = orthogonal_vector * lateral_disposition
 
-            # apply to current location
-            spawn_location.x += orthogonal_vector[0]
-            spawn_location.y += orthogonal_vector[1]
-            spawn_location.z += orthogonal_vector[2]
+                # apply to current location
+                spawn_location.x += orthogonal_vector[0]
+                spawn_location.y += orthogonal_vector[1]
+                spawn_location.z += orthogonal_vector[2]
 
-        rotation = spawn.transform.rotation
-        return self.spawn_anomaly(carla.Transform(spawn_location, rotation))
+            rotation = spawn.transform.rotation
+            spawn_location.z += 0.30 #prevent collision at start
+            # print(ego_map_point)
+            # print(carla.Transform(spawn_location, rotation))
+
+            a_id, a_transform, a_object = self.spawn_anomaly(carla.Transform(spawn_location, rotation))
+            count += 1
+            if count > 100:
+                print("Constantly failing to spawn object at different location! -> Abort")
+                break
+            if not a_object == None:
+                spawn_failed = False
+
+        return a_id, a_transform
 
 
 
     def spawn_anomaly(self, transform):
-
-        ped_blueprints = self.bp_lib.filter('static.prop.*')
-        anomaly_object = random.choice(ped_blueprints)
-
-
-        player = self.world.spawn_actor(anomaly_object,transform)
-        if player == None: print("!!! No anomaly spawned !!!")
+        anomaly_object = random.choice(self.valid_anomalys)
+        # print(anomaly_object)
+        player = self.world.try_spawn_actor(anomaly_object,transform)
+        # self.get_valid_anomalys()
 
 
-        self.actor_list.append(player)
+        if player == None: 
+            print("!!! No anomaly spawned !!!")
+        else: self.actor_list.append(player)
+
         self.anomaly_point = transform
-        return anomaly_object.id, transform
+        return anomaly_object.id, transform, player
+
+    
+    def get_valid_anomalys(self):
+        valid_list = {}
+        blueprints = self.bp_lib.filter('static.prop.*')
+        transform = carla.Transform(carla.Location(0,0,0), carla.Rotation(0,0,0))
+        counter = 0
+        for object in blueprints:
+            player = self.world.spawn_actor(object, transform)
+            # print(player.attributes)
+            if not player.attributes["role_name"] == "default" and not player.attributes["size"] == "tiny" and not player.attributes["size"] == "small":
+                valid_list[f"object_{counter}"] = object.id
+                counter += 1
+            player.destroy()
+        
+        with open(f"anomaly_list.json", "w") as fp:
+            json.dump(valid_list, fp, indent = 4)
+
+    def set_valid_anomalys(self):
+        with open('anomaly_list.json') as json_file:
+            anomaly_list = json.load(json_file)
+        
+        bp_list = []
+        for x in range(len(anomaly_list)): #len(anomaly_list)
+            bp = self.bp_lib.filter(anomaly_list[f"object_{x}"])[0]
+            bp_list.append(bp)
+
+        print(f"~~~~~~~~~~~~~~\n# Utilizing {len(bp_list)} anomalies \n~~~~~~~~~~~~~~")
+        return bp_list
+
 
     def set_goalPoint(self, max_numb):
         if max_numb < 4: max_numb = 4
@@ -347,7 +394,7 @@ class Environment:
         self.world.debug.draw_point(self.trajectory_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
 
         # color anomaly
-        bounding_box_set = self.world.get_level_bbs(carla.CityObjectLabel.Dynamic) + self.world.get_level_bbs(carla.CityObjectLabel.Static)
+        bounding_box_set = self.world.get_level_bbs(carla.CityObjectLabel.Dynamic) + self.world.get_level_bbs(carla.CityObjectLabel.Static) + self.world.get_level_bbs(carla.CityObjectLabel.Pedestrians) + self.world.get_level_bbs(carla.CityObjectLabel.Vehicles)
         best = 100000.
         bbox = None
         for box in bounding_box_set:
@@ -363,6 +410,7 @@ class Environment:
 
         # self.world.debug.draw_box(carla.BoundingBox(self.anomaly_point.get_transform().location,carla.Vector3D(3.5,3.5,4)),self.anomaly_point.get_transform().rotation, 0.3, carla.Color(255,140,0,0),-1.)
         self.world.debug.draw_box(bbox, self.anomaly_point.rotation, 0.15, carla.Color(r=0, g=0, b=0),lifetime)
+
 
     #Returns only the waypoints in one lane
     def single_lane(self, waypoint_list, lane):

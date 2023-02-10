@@ -21,7 +21,7 @@ from PIL import Image
 
 import torch
 
-from env_carla_synch import Environment
+from env_carla import Environment
 
 from clearml import Task, Dataset
 
@@ -82,7 +82,7 @@ class Sampler:
     def sample(self, world_model=None, random_spawn=True):
         if world_model == None: world_model = MAP_SET[random.randrange(0,len(MAP_SET))]
 
-        env = Environment(world=world_model, port=2000, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height,
+        env = Environment(world=world_model, port=2200, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height,
                          cam_rotation=self.cam_rotation, cam_zoom=self.cam_zoom, host=self.host, random_spawn=random_spawn, cam_x_offset=self.cam_x_offset)
         env.init_ego()
         # image, segmentation = env.reset()

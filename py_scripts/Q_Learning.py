@@ -37,6 +37,8 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
+HOST = "tks-hertz.fzi.de"
+PORT = 2200
 
 PREVIEW = False
 VIDEO_EVERY = 1_000
@@ -84,7 +86,7 @@ def main(withAE, concatAE, clearmlOn):
     else:
         settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
 
-    env = ScenarioEnvironment(world=settings.world, host='tks-iso.fzi.de', port=2200, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+    env = ScenarioEnvironment(world=settings.world, host=HOST, port=PORT, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
