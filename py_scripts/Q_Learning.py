@@ -37,15 +37,15 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hertz.fzi.de"
+HOST = "tks-haper.fzi.de"
 PORT = 2200
 
 PREVIEW = False
 VIDEO_EVERY = 1_000
 PATH_MODEL = "model.pt"
 CLEARML_PATH_MODEL = "63619a3288814018b59c701a6a87039b"
-PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-07_16:36"
-CLEARML_PATH_SCENARIOS = "e5570416b672479ab22aab7e883680b6"
+PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-07_16:37"
+CLEARML_PATH_SCENARIOS = "8637cae0f56f44f2acc79ce06c8d1b35"
 IM_HEIGHT = 256
 IM_WIDTH = 256
 

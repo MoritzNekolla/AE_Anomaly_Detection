@@ -141,7 +141,7 @@ class ScenarioPlanner:
         print(f"~~~~~~~~~~~~~~\n# Collecting {amount} scenarios among world: {self.world} \n~~~~~~~~~~~~~~")
         scenario_set = {}
         timestr = time.strftime("%Y-%m-%d_%H:%M")
-        chunk_num = 4
+        chunk_num = 504
         # storagePath = self.create_Storage()
         storagePath = ROOT_STORAGE_PATH
 
@@ -149,7 +149,7 @@ class ScenarioPlanner:
                             cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
         env.init_ego()
 
-        for x in range(4001,amount):
+        for x in range(9001,amount):
 
             # add to dict
             s_dict, snapshot = self.generateScenario(env)
