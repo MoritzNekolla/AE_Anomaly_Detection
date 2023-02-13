@@ -106,7 +106,6 @@ class ScenarioEnvironment:
     def init_ego(self, car_type):
         self.vehicle_bp = self.bp_lib.find(car_type)
         self.ss_camera_bp = self.bp_lib.find('sensor.camera.rgb')
-        # self.ss_camera_bp_sg = self.bp_lib.find('sensor.camera.semantic_segmentation')
         self.col_sensor_bp = self.bp_lib.find('sensor.other.collision')
 
         # Configure rgb sensors
@@ -119,11 +118,6 @@ class ScenarioEnvironment:
         self.ss_cam_rotation = carla.Rotation(self.cam_rotation,0,0)
         self.ss_cam_transform = carla.Transform(self.ss_cam_location, self.ss_cam_rotation)
 
-        # # Configure segmantic sensors
-        # self.ss_camera_bp_sg.set_attribute('image_size_x', f'{self.s_width}')
-        # self.ss_camera_bp_sg.set_attribute('image_size_y', f'{self.s_height}')
-        # self.ss_camera_bp_sg.set_attribute('fov', str(self.cam_zoom))
-        
         # collision sensor
         self.col_sensor_location = carla.Location(0,0,0)
         self.col_sensor_rotation = carla.Rotation(0,0,0)
@@ -147,10 +141,19 @@ class ScenarioEnvironment:
         # Spawn vehicle
         a_location = carla.Location(self.settings.agent.spawn_point.location.x, self.settings.agent.spawn_point.location.y, self.settings.agent.spawn_point.location.z)
         a_rotation = carla.Rotation(self.settings.agent.spawn_point.rotation.pitch, self.settings.agent.spawn_point.rotation.yaw, self.settings.agent.spawn_point.rotation.roll)
-        a_location.z += 0.2
+        a_location.z += 0.3
         a_transform = carla.Transform(a_location, a_rotation)
 
-        self.vehicle = self.world.spawn_actor(self.vehicle_bp, a_transform)
+        counter = 0
+        self.vehicle = None
+        while self.vehicle == None:
+            self.vehicle = self.world.try_spawn_actor(self.vehicle_bp, a_transform)
+            if counter > 100:
+                print("Spawning error: Killed")
+                print(f"Actors: {len(self.world.get_actors())}")
+                break
+            counter += 1
+        
         self.vehicle.set_autopilot(self.autoPilotOn)
         self.actor_list.append(self.vehicle)
 

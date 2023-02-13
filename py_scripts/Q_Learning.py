@@ -37,14 +37,14 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-haper.fzi.de"
+HOST = "tks-hawk.fzi.de"
 PORT = 2200
 
 PREVIEW = False
 VIDEO_EVERY = 1_000
 PATH_MODEL = "model.pt"
-CLEARML_PATH_MODEL = "63619a3288814018b59c701a6a87039b"
-PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-07_16:37"
+CLEARML_PATH_MODEL = "f93abef8342244859741408739724d18"
+PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-10_13:37"
 CLEARML_PATH_SCENARIOS = "8637cae0f56f44f2acc79ce06c8d1b35"
 IM_HEIGHT = 256
 IM_WIDTH = 256
@@ -103,7 +103,7 @@ def main(withAE, concatAE, clearmlOn):
     end_point = None
 
     for i in range(N_EPISODES):
-
+        print(f"Episode: {i} | Scenario_index {scenario_index}")
         reward_per_episode = 0
         start = time.time()
         n_frame = 1
@@ -272,7 +272,7 @@ def main(withAE, concatAE, clearmlOn):
         if scenario_index >= settings.size:
             scenario_index = 0
             print("Reseting scenario counter!")
-        print(f"Episode: {i}")
+        
 
     writer.flush()
 
@@ -369,9 +369,9 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
     # tchw_list = aug_list
     # if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode
     snapshot = aug_list[10].numpy()
-    print(snapshot.shape)
+    # print(snapshot.shape)
     snapshot = np.transpose(snapshot, (1,2,0))
-    print(snapshot.shape)
+    # print(snapshot.shape)
     plt.imsave("agent_snapshot.png", snapshot)
 
     tchw_list = torch.stack(aug_list)  # Adds "list" like entry --> TCHW
