@@ -38,7 +38,9 @@ from training import EPS_START
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
 HOST = "tks-hawk.fzi.de"
-PORT = 2200
+# HOST = "localhost"
+
+PORT_LIST = [2200,2300,2400,2500]
 
 PREVIEW = False
 VIDEO_EVERY = 1_000
@@ -55,6 +57,9 @@ EGO_Y = 128
 evaluater = None
 
 def main(withAE, concatAE, clearmlOn):
+    port_list = PORT_LIST
+    current_port = port_list.pop(0)
+    day_count = time.time()
     task = init_clearML(withAE, concatAE, clearmlOn)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cpu": print("!!! device is CPU !!!")
@@ -86,7 +91,7 @@ def main(withAE, concatAE, clearmlOn):
     else:
         settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
 
-    env = ScenarioEnvironment(world=settings.world, host=HOST, port=PORT, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+    env = ScenarioEnvironment(world=settings.world, host=HOST, port=current_port, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
@@ -103,7 +108,14 @@ def main(withAE, concatAE, clearmlOn):
     end_point = None
 
     for i in range(N_EPISODES):
-        print(f"Episode: {i} | Scenario_index {scenario_index}")
+        # if time.time() - day_count > 180: # 86.400 = 24 h
+        #     print("Switching to new server...")
+        #     day_count = time.time()
+        #     env.deleteActors()
+        #     del env
+        #     env, current_port, port_list = conncet_to_carla(settings, port_list, current_port)
+        #     env.init_ego(car_type=settings.car_type)
+        print(f"Episode: {i} | Scenario_index: {scenario_index}")
         reward_per_episode = 0
         start = time.time()
         n_frame = 1
@@ -448,6 +460,26 @@ def init_clearML(withAE, concatAE, clearmlOn):
         task.execute_remotely('rtx3090', clone=False, exit_process=True) 
 
     return task
+
+def conncet_to_carla(settings, port_list, current_port):
+    env = None
+    while env == None:
+        for port in port_list:
+            try:
+                print(f"Trying to connect to {HOST} at port {port}...")
+                env = ScenarioEnvironment(world=settings.world, host=HOST, port=port, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
+                current_port = port
+                print(f"Connected. Continuing training!")
+                break
+            except:
+                print(f"Connection failed!")
+    
+    new_port_list = []
+    for port in PORT_LIST:
+        if not port == current_port:
+            new_port_list.append(port)
+    
+    return env, current_port, new_port_list
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

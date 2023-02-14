@@ -26,8 +26,8 @@ RESET_SLEEP_TIME = 1
 
 FACING_DEGREE = 90 # which direction the car is facing
 
-FIXED_DELTA_SECONDS = 0.05
-SUBSTE_DELTA = 0.007
+FIXED_DELTA_SECONDS = 0.1
+SUBSTEP_DELTA = 0.01
 MAX_SUBSTEPS = 10
 
 # ==============================================================================
@@ -57,7 +57,7 @@ class ScenarioEnvironment:
                  cam_height=BEV_DISTANCE, cam_rotation=-90, cam_zoom=110, cam_x_offset=10.):
         weak_self = weakref.ref(self)
         self.client = carla.Client(host, port)            #Connect to server
-        self.client.set_timeout(30.0)
+        self.client.set_timeout(15.0)
 
 
         self.autoPilotOn = False
@@ -94,13 +94,13 @@ class ScenarioEnvironment:
         w_settings.synchronous_mode = True
         w_settings.fixed_delta_seconds = FIXED_DELTA_SECONDS # 10 fps | fixed_delta_seconds <= max_substep_delta_time * max_substeps
         w_settings.substepping = True
-        w_settings.max_substep_delta_time = SUBSTE_DELTA
+        w_settings.max_substep_delta_time = SUBSTEP_DELTA
         w_settings.max_substeps = MAX_SUBSTEPS
         self.world.apply_settings(w_settings)
         self.fps_counter = 0
         self.max_fps = int(1/FIXED_DELTA_SECONDS) * EPISODE_TIME
 
-        print(f"~~~~~~~~~~~~~~\n## Simulator settings ##\nFrames: {int(1/FIXED_DELTA_SECONDS)}\nSubstep_delta: {SUBSTE_DELTA}\nMax_substeps: {MAX_SUBSTEPS}\n~~~~~~~~~~~~~~")
+        print(f"~~~~~~~~~~~~~~\n## Simulator settings ##\nFrames: {int(1/FIXED_DELTA_SECONDS)}\nSubstep_delta: {SUBSTEP_DELTA}\nMax_substeps: {MAX_SUBSTEPS}\n~~~~~~~~~~~~~~")
 
 
     def init_ego(self, car_type):
@@ -149,7 +149,7 @@ class ScenarioEnvironment:
         while self.vehicle == None:
             self.vehicle = self.world.try_spawn_actor(self.vehicle_bp, a_transform)
             if counter > 100:
-                print("Spawning error: Killed")
+                print("Spawning vehicle error: Killed")
                 print(f"Actors: {len(self.world.get_actors())}")
                 break
             counter += 1
@@ -236,7 +236,7 @@ class ScenarioEnvironment:
         reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
         reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
-        reward_total = reward_time + 2*reward_distance + reward_collision
+        reward_total = reward_distance + reward_collision # + reward_time
 
         if goal_distance < 2.:
             done = True
@@ -253,7 +253,16 @@ class ScenarioEnvironment:
         anomaly_location = carla.Location(self.settings.anomaly.spawn_point.location.x, self.settings.anomaly.spawn_point.location.y, self.settings.anomaly.spawn_point.location.z)
         anomaly_rotation = carla.Rotation(self.settings.anomaly.spawn_point.rotation.pitch, self.settings.anomaly.spawn_point.rotation.yaw, self.settings.anomaly.spawn_point.rotation.roll)
         anomaly_transform = carla.Transform(anomaly_location, anomaly_rotation)
-        player = self.world.try_spawn_actor(anomaly, anomaly_transform)
+        
+        counter = 0
+        player = None
+        while player == None:
+            player = self.world.try_spawn_actor(anomaly, anomaly_transform)
+            if counter > 100:
+                print("Spawning anomaly error: No anomaly this episode")
+                print(f"Actors: {len(self.world.get_actors())}")
+                break
+            counter += 1
 
         self.actor_list.append(player)
         return player
@@ -574,7 +583,9 @@ class ScenarioEnvironment:
             self.vehicle.set_autopilot(False)
 
         for actor in self.actor_list:
-            actor.destroy()       
+            if not actor == None:
+                actor.destroy()   
+ 
         # self.client.apply_batch([carla.command.DestroyActor(x) for x in self.actor_list])
 
     def __del__(self):
