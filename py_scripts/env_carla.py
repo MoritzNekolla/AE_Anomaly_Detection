@@ -80,9 +80,6 @@ class Environment:
         self.spawn_points = self.map.get_spawn_points()
         self.spawn_point = None
         self.trajectory_list = None
-
-        for sp in self.spawn_points:
-            print(sp)
             
         self.s_width = s_width
         self.s_height = s_height
@@ -267,12 +264,15 @@ class Environment:
 
 
     def spawn_anomaly(self, transform):
-        ped_blueprints = self.bp_lib.filter('static.prop.*')
+        ped_blueprints = self.bp_lib.filter('walker.pedestrian.0018')
         anomaly_object = random.choice(ped_blueprints)
-
+        
+        if anomaly_object.has_attribute('is_invincible'):
+            anomaly_object.set_attribute('is_invincible', 'false')  
+            
         player = self.world.try_spawn_actor(anomaly_object,transform)
         if player == None: print("!!! No actor spawned !!!")
-        print(player)
+
 
         self.actor_list.append(player)
         self.anomaly_point = player

@@ -237,8 +237,8 @@ class ScenarioEnvironment:
             reward_collision = -1
             crashed = 1
 
-        velocity_reward = v_kmh / 20
-        if v_kmh > 20:
+        velocity_reward = v_kmh / 40
+        if v_kmh > 40:
             # velocity_reward = v_kmh / (80 - 3*v_kmh)
             velocity_reward = -1
         # else:
@@ -267,6 +267,8 @@ class ScenarioEnvironment:
     def spawn_anomaly(self):
         # select anomaly according to settings
         anomaly = self.bp_lib.filter(self.settings.anomaly.type)[0]
+        if anomaly.has_attribute('is_invincible'):
+            anomaly.set_attribute('is_invincible', 'false')  
 
         # spawn anomaly at specific point
         anomaly_location = carla.Location(self.settings.anomaly.spawn_point.location.x, self.settings.anomaly.spawn_point.location.y, self.settings.anomaly.spawn_point.location.z)
