@@ -117,14 +117,25 @@ def main(withAE, concatAE, clearmlOn):
         #     env.init_ego(car_type=settings.car_type)
         print(f"Episode: {i} | Scenario_index: {scenario_index}")
         reward_per_episode = 0
-        start = time.time()
         n_frame = 1
 
-        scenario = settings.scenario_set[f"scenario_{scenario_index}"] # select new scenario
-        out = None
-        while out == None:
-            out = env.reset(settings=scenario)
+        spawn_worked = False
+        counter = 0
+        while spawn_worked == False:
+            scenario = settings.scenario_set[f"scenario_{scenario_index}"] # select new scenario
+            _, spawn_worked = env.reset(settings=scenario)
+            counter +=1
+            if counter > 3:
+                counter = 0
+                print("Constantly failing to spawn vehicle... skipping scenario!!!")
+                scenario_index += 1
+                if scenario_index >= settings.size:
+                    scenario_index = 0
+                    print("Reseting scenario counter!")
+                print(f"Now trying to run scenario {scenario_index}")
+                
 
+        start = time.time()
         # env.spawn_anomaly_alongRoad(max_numb=20)
         spawn_point = np.array([scenario.agent.spawn_point.location.x, scenario.agent.spawn_point.location.y, scenario.agent.spawn_point.location.z])
         goal_point = np.array([scenario.goal_point.location.x, scenario.goal_point.location.y, scenario.goal_point.location.z])

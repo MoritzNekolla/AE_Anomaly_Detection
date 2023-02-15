@@ -144,17 +144,20 @@ class ScenarioEnvironment:
         a_location.z += 0.3
         a_transform = carla.Transform(a_location, a_rotation)
 
-        try:
-            counter = 0
-            self.vehicle = None
-            while self.vehicle == None:
-                self.vehicle = self.world.try_spawn_actor(self.vehicle_bp, a_transform)
-                if counter > 100:
-                    print("Spawning vehicle error: Killed")
-                    print(f"Actors: {len(self.world.get_actors())}")
-                    break
-                counter += 1
+        counter = 0
+        self.vehicle = None
+        spawn_worked = True
+        while self.vehicle == None:
+            self.vehicle = self.world.try_spawn_actor(self.vehicle_bp, a_transform)
+            time.sleep(0.25)
+            if counter > 10:
+                print("Spawning vehicle error: Killed")
+                print(f"Actors: {len(self.world.get_actors())}")
+                spawn_worked = False
+                break
+            counter += 1
             
+        if spawn_worked:
             self.vehicle.set_autopilot(self.autoPilotOn)
             self.actor_list.append(self.vehicle)
 
@@ -189,10 +192,10 @@ class ScenarioEnvironment:
             self.episode_start = time.time()
 
             obs = self.get_observation()
-        except:
+        else:
             obs = None
 
-        return obs
+        return obs, spawn_worked
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
@@ -244,9 +247,9 @@ class ScenarioEnvironment:
         # stay on lane
         ego_map_point = self.getEgoWaypoint()
         ego_point = self.get_Vehicle_transform()
-        distance_ego = ego_point.location.distance(ego_map_point)
+        distance_ego = ego_point.location.distance(ego_map_point.transform.location)
         out_of_map = 0
-        if distance_ego > 3.:
+        if distance_ego > 1.:
             out_of_map = -1
 
         reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
