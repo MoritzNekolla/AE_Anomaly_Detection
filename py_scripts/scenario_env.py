@@ -144,49 +144,55 @@ class ScenarioEnvironment:
         a_location.z += 0.3
         a_transform = carla.Transform(a_location, a_rotation)
 
-        counter = 0
-        self.vehicle = None
-        while self.vehicle == None:
-            self.vehicle = self.world.try_spawn_actor(self.vehicle_bp, a_transform)
-            if counter > 100:
-                print("Spawning vehicle error: Killed")
-                print(f"Actors: {len(self.world.get_actors())}")
-                break
-            counter += 1
-        
-        self.vehicle.set_autopilot(self.autoPilotOn)
-        self.actor_list.append(self.vehicle)
+        try:
+            counter = 0
+            self.vehicle = None
+            while self.vehicle == None:
+                self.vehicle = self.world.try_spawn_actor(self.vehicle_bp, a_transform)
+                if counter > 100:
+                    print("Spawning vehicle error: Killed")
+                    print(f"Actors: {len(self.world.get_actors())}")
+                    break
+                counter += 1
+            
+            self.vehicle.set_autopilot(self.autoPilotOn)
+            self.actor_list.append(self.vehicle)
 
-        # Attach and listen to image sensor (RGB)
-        self.ss_cam = self.world.spawn_actor(self.ss_camera_bp, self.ss_cam_transform, attach_to=self.vehicle, attachment_type=carla.AttachmentType.Rigid)
-        self.actor_list.append(self.ss_cam)
-        self.ss_cam.listen(lambda data: self.__process_sensor_data(data))
+            # Attach and listen to image sensor (RGB)
+            self.ss_cam = self.world.spawn_actor(self.ss_camera_bp, self.ss_cam_transform, attach_to=self.vehicle, attachment_type=carla.AttachmentType.Rigid)
+            self.actor_list.append(self.ss_cam)
+            self.ss_cam.listen(lambda data: self.__process_sensor_data(data))
 
-        # # Attach and listen to image sensor (Semantic Seg)
-        # self.ss_cam_seg = self.world.spawn_actor(self.ss_camera_bp_sg, self.ss_cam_transform, attach_to=self.vehicle, attachment_type=carla.AttachmentType.Rigid)
-        # self.actor_list.append(self.ss_cam_seg)
-        # self.ss_cam_seg.listen(lambda data: self.__process_sensor_data_Seg(data))
+            # # Attach and listen to image sensor (Semantic Seg)
+            # self.ss_cam_seg = self.world.spawn_actor(self.ss_camera_bp_sg, self.ss_cam_transform, attach_to=self.vehicle, attachment_type=carla.AttachmentType.Rigid)
+            # self.actor_list.append(self.ss_cam_seg)
+            # self.ss_cam_seg.listen(lambda data: self.__process_sensor_data_Seg(data))
 
-        # Attach and listen to collision sensor
-        self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
-        self.actor_list.append(self.col_sensor)
-        self.col_sensor.listen(lambda event: self.__process_collision_data(event))
+            # Attach and listen to collision sensor
+            self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
+            self.actor_list.append(self.col_sensor)
+            self.col_sensor.listen(lambda event: self.__process_collision_data(event))
 
-        # spawn anomaly according to settings
-        self.spawn_anomaly()
+            # spawn anomaly according to settings
+            self.spawn_anomaly()
 
-        # set weather according to settings
-        self.set_Weather()
-        
-        # select goal_point according to settings
-        self.set_goalPoint()
+            # set weather according to settings
+            self.set_Weather()
+            
+            # select goal_point according to settings
+            self.set_goalPoint()
 
-        self.tick_world(times=6)
-        self.fps_counter = 0
-        time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
+            self.tick_world(times=6)
+            self.fps_counter = 0
+            time.sleep(RESET_SLEEP_TIME)   # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 
-        self.episode_start = time.time()
-        return self.get_observation()
+            self.episode_start = time.time()
+
+            obs = self.get_observation()
+        except:
+            obs = None
+
+        return obs
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
@@ -214,8 +220,8 @@ class ScenarioEnvironment:
         # Get goal distance
         goal_distance = self.goalPoint.distance(self.get_Vehicle_transform().location)
         # Get velocity of vehicle
-        # v = self.vehicle.get_velocity()
-        # v_kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
+        v = self.vehicle.get_velocity()
+        v_kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
 
         # Set reward and 'done' flag
         done = False
@@ -225,18 +231,28 @@ class ScenarioEnvironment:
 
         if len(self.collision_hist) != 0:
             done = True
-            reward_collision = -100
+            reward_collision = -1
             crashed = 1
 
-        # elif v_kmh < 20:
-        #     reward = v_kmh / (80 - 3*v_kmh)
+        velocity_reward = v_kmh / 20
+        if v_kmh > 20:
+            # velocity_reward = v_kmh / (80 - 3*v_kmh)
+            velocity_reward = -1
         # else:
-        #     reward = 1
+        #     velocity_reward = 1
+
+        # stay on lane
+        ego_map_point = self.getEgoWaypoint()
+        ego_point = self.get_Vehicle_transform()
+        distance_ego = ego_point.location.distance(ego_map_point)
+        out_of_map = 0
+        if distance_ego > 3.:
+            out_of_map = -1
 
         reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
         reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
-        reward_total = reward_distance + reward_collision # + reward_time
+        reward_total = reward_distance + 200*reward_collision + out_of_map + velocity_reward - 0.1 # + reward_time
 
         if goal_distance < 2.:
             done = True

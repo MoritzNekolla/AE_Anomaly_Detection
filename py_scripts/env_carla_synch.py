@@ -79,8 +79,8 @@ class Environment:
         self.spawn_point = None
         self.trajectory_list = None
 
-        for sp in self.spawn_points:
-            print(sp)
+        # for sp in self.spawn_points:
+        #     print(sp)
         self.s_width = s_width
         self.s_height = s_height
         self.cam_height = cam_height

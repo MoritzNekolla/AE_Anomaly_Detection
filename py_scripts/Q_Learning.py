@@ -37,7 +37,7 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hawk.fzi.de"
+HOST = "tks-graham.fzi.de"
 # HOST = "localhost"
 
 PORT_LIST = [2200,2300,2400,2500]
@@ -121,7 +121,10 @@ def main(withAE, concatAE, clearmlOn):
         n_frame = 1
 
         scenario = settings.scenario_set[f"scenario_{scenario_index}"] # select new scenario
-        env.reset(settings=scenario)
+        out = None
+        while out == None:
+            out = env.reset(settings=scenario)
+
         # env.spawn_anomaly_alongRoad(max_numb=20)
         spawn_point = np.array([scenario.agent.spawn_point.location.x, scenario.agent.spawn_point.location.y, scenario.agent.spawn_point.location.z])
         goal_point = np.array([scenario.goal_point.location.x, scenario.goal_point.location.y, scenario.goal_point.location.z])
@@ -237,7 +240,9 @@ def main(withAE, concatAE, clearmlOn):
                     'avg_frames': np.average(frames_per_episode_list)
                 }
                 crash_scalars = {
-                    'crashed)': crashed,
+                    'crashed': crashed
+                }
+                succeed_scalars = {
                     'succed': succeed
                 }
                 runtime_scalars = {
@@ -248,8 +253,8 @@ def main(withAE, concatAE, clearmlOn):
                 writer.add_scalars("Distance", dist_scalars, i)
                 writer.add_scalars("Duration", duration_scalars, i)
                 writer.add_scalars("Frame", frame_scalars, i)
-                writer.add_scalars("Crashed_Succed", crash_scalars, i)
-                # writer.add_scalars("Succeed", succeed_scalars, i)
+                writer.add_scalars("Crashed", crash_scalars, i)
+                writer.add_scalars("Succeed", succeed_scalars, i)
                 writer.add_scalars("Runtime_per_forward_pass", runtime_scalars, i)
 
                 if reward_per_episode > reward_best:
