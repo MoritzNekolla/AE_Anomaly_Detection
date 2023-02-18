@@ -37,7 +37,7 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-graham.fzi.de"
+HOST = "tks-hawk.fzi.de"
 # HOST = "localhost"
 
 PORT_LIST = [2200,2300,2400,2500]
@@ -62,6 +62,7 @@ def main(withAE, concatAE, clearmlOn):
     day_count = time.time()
     task = init_clearML(withAE, concatAE, clearmlOn)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Running on: {HOST} with port: {current_port}")
     if device == "cpu": print("!!! device is CPU !!!")
 
     if withAE:
