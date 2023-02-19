@@ -37,7 +37,7 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hawk.fzi.de"
+HOST = "tks-hesse.fzi.de"
 # HOST = "localhost"
 
 PORT_LIST = [2200,2300,2400,2500]
@@ -54,7 +54,6 @@ IM_WIDTH = 256
 EGO_X = 246
 EGO_Y = 128
 
-evaluater = None
 
 def main(withAE, concatAE, clearmlOn):
     port_list = PORT_LIST
@@ -65,6 +64,7 @@ def main(withAE, concatAE, clearmlOn):
     print(f"Running on: {HOST} with port: {current_port}")
     if device == "cpu": print("!!! device is CPU !!!")
 
+    evaluater = None
     if withAE:
         ae_model = AutoEncoder()
 
@@ -185,11 +185,15 @@ def main(withAE, concatAE, clearmlOn):
 
             if withAE and not concatAE:
                 detectionMap = evaluater.getDetectionMap(obs_next)
-                reward = calcualte_enriched_reward(reward, detectionMap, DISTANCE_MATRIX)
+                rich_reward = calcualte_enriched_reward(reward, detectionMap, DISTANCE_MATRIX)
+                reward = reward + rich_reward
+                reward = float(reward)
+                # print(np.dtype(reward))
                 # print(reward)
                 
 
             reward_per_episode += reward
+            print(reward)
             reward_torch = torch.tensor([reward], device=device)  # For compatibility with PyTorch
 
             if env.isTimeExpired():  # Since the agent can simply stand now, the episode should terminate after a given time
@@ -272,7 +276,7 @@ def main(withAE, concatAE, clearmlOn):
                 if reward_per_episode > reward_best:
                     reward_best = reward_per_episode
                     name = f"Best | Scenario_{scenario_index}: "
-                    save_video(chw_list, reward_best, i, writer, withAE, concatAE, name)
+                    save_video(chw_list, reward_best, i, writer, withAE, concatAE, name, evaluater)
                     # tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
                     # tchw_list = torch.squeeze(tchw_list)
                     # name = "DQN Champ: " + str(reward_per_episode)
@@ -287,7 +291,7 @@ def main(withAE, concatAE, clearmlOn):
         # Save video of episode to ClearML https://github.com/pytorch/pytorch/issues/33226
         if i % VIDEO_EVERY == 0:
             name = "DQN Agent: "
-            save_video(chw_list, reward_best, i, writer, withAE, concatAE, name)
+            save_video(chw_list, reward_best, i, writer, withAE, concatAE, name, evaluater)
 
         # Update the target network, copying all weights and biases in DQN
         if i % TARGET_UPDATE == 0:
@@ -333,10 +337,10 @@ def calcualte_enriched_reward(reward, detectionMap, distanceMap):
     rewardMap = detectionMap * distanceMap # element wise
     total_reward = np.sum(rewardMap)
     penalty = total_reward / (rewardMap.shape[0] * rewardMap.shape[1] - 1) # minus one, because the origion of the car should not be taken into count and is always zero
-    reward = 1 - penalty# * 0.1
-    reward = np.float32(reward)
+    reward_result = 1 - penalty# * 0.1
+    reward_result = np.float32(reward_result)
 
-    return reward
+    return reward_result
 
 
 
@@ -350,7 +354,7 @@ def add_ring(matrix, value):
     return b
 
 
-def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
+def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name, evaluater):
     aug_list = []
 
     if concatAE:
@@ -370,18 +374,22 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name):
             stacked_img = torch.squeeze(stacked_img)
             stacked_img = torch.tensor_split(stacked_img, 2, dim=0)
             miniMap = torch.squeeze(stacked_img[1]) # add minimap
+            observation = torch.squeeze(stacked_img[0])
             img = stacked_img[0]
             img = img.numpy()
             img = np.squeeze(img)
-            img = np.transpose(img, (2,0,1)) # shape: w,h,3
+            img = np.transpose(img, (1,2,0)) # shape: w,h,3
             detectionMap = evaluater.getColoredDetectionMap(img)
             detectionMap = color_pixel(detectionMap)
-            seperator = np.zeros((256,2,3))
+            detectionMap = np.transpose(detectionMap, (2,0,1)) # shape: 3,w,h
+            detectionMap = torch.as_tensor(detectionMap)
+            seperator = np.zeros((3,256,2))
             seperator[:,:,:] = 1.
-            aug_img = np.hstack((img, seperator, detectionMap))
-            aug_img = np.transpose(aug_img, (2,0,1)) # shape: 3,w,h
-            aug_img = np.hstack((aug_img, seperator, miniMap))
-            aug_img = torch.as_tensor(np.array([aug_img]))
+            seperator = torch.as_tensor(seperator)
+            # aug_img = np.hstack((img, seperator, detectionMap))
+            aug_img = torch.cat((observation, seperator, detectionMap, seperator, miniMap), dim=2)
+            # aug_img = np.hstack((aug_img, seperator, miniMap))
+            # aug_img = torch.as_tensor(np.array([aug_img]))
             aug_list.append(aug_img)
     else: # baseline
         for stacked_img in chw_list:

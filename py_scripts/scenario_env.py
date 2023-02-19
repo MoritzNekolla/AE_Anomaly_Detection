@@ -255,7 +255,7 @@ class ScenarioEnvironment:
         # reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
         reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
-        reward_total = 3*reward_distance + 200*reward_collision + out_of_map + velocity_reward - 0.1 # + reward_time
+        reward_total = 10*reward_distance + 200*reward_collision + out_of_map + velocity_reward - 0.1 # + reward_time
 
         if goal_distance < 2.:
             done = True
