@@ -37,10 +37,10 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hubbard.fzi.de"
-# HOST = "localhost"
+# HOST = "tks-hubbard.fzi.de"
+HOST = "localhost"
 
-PORT_LIST = [2200,2300,2400,2500]
+PORT_LIST = [2100,2300,2400,2500]
 
 PREVIEW = False
 VIDEO_EVERY = 1_000
@@ -155,17 +155,32 @@ def main(withAE, concatAE, clearmlOn):
         # add heat and minimap
         if concatAE: obs_current = np.array([obs_current, heatMap, minimap])
         else : obs_current = np.array([obs_current, minimap])
-        # batch shape
-        obs_current = np.array([obs_current])
-        obs_current = torch.as_tensor(obs_current)
+
+        # Temporal stacking
+        time_obs = [obs_current]
+
+        # # batch shape
+        # obs_current = np.array([obs_current])
+        # obs_current = torch.as_tensor(obs_current)
 
         chw_list = []
         r_fwd_list = []
 
+        t_0 = obs_current
+        t_1 = obs_current
+
         while True:
             fwdPass = time.time()
-#             chw = obs_current.squeeze(0)  # Remove batch information from BCHW
-            chw_list.append(obs_current)
+            # for video
+            chw_list.append(torch.as_tensor(np.array([obs_current])))
+
+            #Temporal stacking
+            obs_current = np.concatenate((t_0, t_1, obs_current), axis=1)
+            print(obs_current.shape)
+
+            # batch shape
+            obs_current = np.array([obs_current])
+            obs_current = torch.as_tensor(obs_current)
 
             # Perform action on observation and buildup replay memory
 
@@ -220,6 +235,8 @@ def main(withAE, concatAE, clearmlOn):
             # Python tuples () https://www.w3schools.com/python/python_tuples.asp
             trainer.replay_memory.push(obs_current, action, obs_next, reward_torch, done)
             
+            t_0 = t_1
+            t_1 = obs_current
             obs_current = obs_next
 
             # Optimization on policy model (I believe this could run in parallel to the data collection task)

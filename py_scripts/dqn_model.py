@@ -143,7 +143,7 @@ class DQN(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=2)      # 3x3 kernel that moves 2 pixels per iteration
+        self.conv1 = nn.Conv2d(9, 16, kernel_size=3, stride=2)      # 3x3 kernel that moves 2 pixels per iteration
         self.bn1 = nn.BatchNorm2d(16)                               # Normalize input features so they are on the same scale
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
@@ -156,7 +156,7 @@ class DQN(nn.Module):
         self.conv6 = nn.Conv2d(32, 32, kernel_size=3, stride=2)
         self.bn6 = nn.BatchNorm2d(32)
 
-        self.mapConv1 = nn.Conv2d(3, 16, kernel_size=3, stride=2)      # 3x3 kernel that moves 2 pixels per iteration
+        self.mapConv1 = nn.Conv2d(9, 16, kernel_size=3, stride=2)      # 3x3 kernel that moves 2 pixels per iteration
         self.mapBn1 = nn.BatchNorm2d(16)                               # Normalize input features so they are on the same scale
         self.mapConv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2)
         self.mapBn2 = nn.BatchNorm2d(32)
