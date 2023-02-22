@@ -138,6 +138,9 @@ class ScenarioEnvironment:
         self.rotated_trajectory_list, self.rotation, self.roateted_agent_spawn, self.trajectory_list = self.loadTrajectory(settings.goal_trajectory)
         self.xAxis_min, self.xAxis_max, self.yAxis_min, self.yAxis_max = self.setAxis()
 
+        # goal_point_list (for reward)
+        self.goalPointList = self.trajectory_list
+
         # Spawn vehicle
         a_location = carla.Location(self.settings.agent.spawn_point.location.x, self.settings.agent.spawn_point.location.y, self.settings.agent.spawn_point.location.z)
         a_rotation = carla.Rotation(self.settings.agent.spawn_point.rotation.pitch, self.settings.agent.spawn_point.rotation.yaw, self.settings.agent.spawn_point.rotation.roll)
@@ -222,6 +225,20 @@ class ScenarioEnvironment:
         run_time = self.fps_counter * FIXED_DELTA_SECONDS
         # Get goal distance
         goal_distance = self.goalPoint.distance(self.get_Vehicle_transform().location)
+
+        # waypoint reward
+        wp_reward = 0
+        tmp_goalList = []
+        for x in range(len(self.goalPointList)):
+            gp = self.goalPointList[x]
+            p_ego = self.get_Vehicle_positionVec()[:2]
+            dist = np.linalg.norm(gp-p_ego)
+            if dist > 1.5:
+                tmp_goalList.append(gp)
+            else:
+                wp_reward += 1
+        self.goalPointList = tmp_goalList
+
         # Get velocity of vehicle
         v = self.vehicle.get_velocity()
         v_kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
@@ -244,18 +261,18 @@ class ScenarioEnvironment:
         # else:
         #     velocity_reward = 1
 
-        # stay on lane
-        ego_map_point = self.getEgoWaypoint()
-        ego_point = self.get_Vehicle_transform()
-        distance_ego = ego_point.location.distance(ego_map_point.transform.location)
-        out_of_map = 0
-        if distance_ego > 1.:
-            out_of_map = -1
+        ## stay on lane
+        # ego_map_point = self.getEgoWaypoint()
+        # ego_point = self.get_Vehicle_transform()
+        # distance_ego = ego_point.location.distance(ego_map_point.transform.location)
+        # out_of_map = 0
+        # if distance_ego > 1.:
+        #     out_of_map = -1
 
         # reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
-        reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
+        # reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
-        reward_total = 0*reward_distance + 200*reward_collision + out_of_map + velocity_reward - 0.1 # + reward_time
+        reward_total =  wp_reward + 200*reward_collision + 0.5*velocity_reward - 0.1 # + reward_time
 
         if goal_distance < 2.:
             done = True
