@@ -38,9 +38,10 @@ from training import EPS_START
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
 # HOST = "tks-hubbard.fzi.de"
-HOST = "localhost"
+# HOST = "localhost"
+HOST = "ids-ford.fzi.de"
 
-PORT_LIST = [2100,2300,2400,2500]
+PORT_LIST = [2200,2300,2400,2500]
 
 PREVIEW = False
 VIDEO_EVERY = 1_000
@@ -156,9 +157,6 @@ def main(withAE, concatAE, clearmlOn):
         if concatAE: obs_current = np.array([obs_current, heatMap, minimap])
         else : obs_current = np.array([obs_current, minimap])
 
-        # Temporal stacking
-        time_obs = [obs_current]
-
         # # batch shape
         # obs_current = np.array([obs_current])
         # obs_current = torch.as_tensor(obs_current)
@@ -166,28 +164,30 @@ def main(withAE, concatAE, clearmlOn):
         chw_list = []
         r_fwd_list = []
 
+        obs_current = torch.unsqueeze(torch.as_tensor(obs_current), 0)
         t_0 = obs_current
         t_1 = obs_current
 
         while True:
             fwdPass = time.time()
             # for video
-            chw_list.append(torch.as_tensor(np.array([obs_current])))
+            chw_list.append(obs_current)
 
             #Temporal stacking
-            obs_current = np.concatenate((t_0, t_1, obs_current), axis=1)
-            print(obs_current.shape)
+            obs_temporal = torch.cat((t_0, t_1, obs_current), dim=2)
+            # print(obs_temporal.size())
 
             # batch shape
-            obs_current = np.array([obs_current])
-            obs_current = torch.as_tensor(obs_current)
+            # obs_current = torch.unsqueeze(obs_current, 0)
+            # obs_current = np.array([obs_current])
+            # obs_current = torch.as_tensor(obs_current)
 
             # Perform action on observation and buildup replay memory
 
             if i % VIDEO_EVERY == 0:
-                action = trainer.select_action(obs_current, 0)
+                action = trainer.select_action(obs_temporal, 0)
             else:
-                action = trainer.select_action(obs_current, epsilon)
+                action = trainer.select_action(obs_temporal, epsilon)
 
             env.tick_world()
             obs_next, reward, done, crashed, succeed = env.step(action)
@@ -229,11 +229,13 @@ def main(withAE, concatAE, clearmlOn):
                 if concatAE: obs_next = np.array([obs_next, heatMap, minimap])
                 else: obs_next = np.array([obs_next, minimap])
                 # batch shape
-                obs_next = np.array([obs_next])
-                obs_next = torch.as_tensor(obs_next)
+                obs_next = torch.unsqueeze(torch.as_tensor(obs_next), 0)
+
+                # Temporal stacking
+                obs_next_temporal = torch.cat((t_1, obs_current, obs_next), dim=2)
             
             # Python tuples () https://www.w3schools.com/python/python_tuples.asp
-            trainer.replay_memory.push(obs_current, action, obs_next, reward_torch, done)
+            trainer.replay_memory.push(obs_temporal, action, obs_next_temporal, reward_torch, done)
             
             t_0 = t_1
             t_1 = obs_current
