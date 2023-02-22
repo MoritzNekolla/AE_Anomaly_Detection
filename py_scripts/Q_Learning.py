@@ -37,7 +37,7 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hesse.fzi.de"
+HOST = "tks-hubbard.fzi.de"
 # HOST = "localhost"
 
 PORT_LIST = [2200,2300,2400,2500]
@@ -193,7 +193,6 @@ def main(withAE, concatAE, clearmlOn):
                 
 
             reward_per_episode += reward
-            print(reward)
             reward_torch = torch.tensor([reward], device=device)  # For compatibility with PyTorch
 
             if env.isTimeExpired():  # Since the agent can simply stand now, the episode should terminate after a given time
@@ -403,13 +402,13 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name, eva
             aug_img =  torch.cat((observation, seperator, miniMap), dim=2)
             aug_list.append(aug_img)
 
-    # tchw_list = aug_list
-    # if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode
-    snapshot = aug_list[10].numpy()
-    # print(snapshot.shape)
-    snapshot = np.transpose(snapshot, (1,2,0))
-    # print(snapshot.shape)
-    plt.imsave("agent_snapshot.png", snapshot)
+    # # tchw_list = aug_list
+    # # if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode
+    # snapshot = aug_list[10].numpy()
+    # # print(snapshot.shape)
+    # snapshot = np.transpose(snapshot, (1,2,0))
+    # # print(snapshot.shape)
+    # plt.imsave("agent_snapshot.png", snapshot)
 
     tchw_list = torch.stack(aug_list)  # Adds "list" like entry --> TCHW
     tchw_list = torch.squeeze(tchw_list)
