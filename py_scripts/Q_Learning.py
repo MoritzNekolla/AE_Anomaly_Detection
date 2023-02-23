@@ -47,8 +47,8 @@ PREVIEW = False
 VIDEO_EVERY = 1_000
 PATH_MODEL = "model.pt"
 CLEARML_PATH_MODEL = "f93abef8342244859741408739724d18"
-PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-10_13:37"
-CLEARML_PATH_SCENARIOS = "8637cae0f56f44f2acc79ce06c8d1b35"
+PATH_SCENARIOS = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-23_01:46/"
+CLEARML_PATH_SCENARIOS = "8cf70bba1df24410bd0ded8ce45d05a1"
 IM_HEIGHT = 256
 IM_WIDTH = 256
 
@@ -117,7 +117,7 @@ def main(withAE, concatAE, clearmlOn):
         #     del env
         #     env, current_port, port_list = conncet_to_carla(settings, port_list, current_port)
         #     env.init_ego(car_type=settings.car_type)
-        scenario_index = 4
+        # scenario_index = 4
         print(f"Episode: {i} | Scenario_index: {scenario_index}")
         reward_per_episode = 0
         n_frame = 1

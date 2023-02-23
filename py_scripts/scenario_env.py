@@ -69,6 +69,7 @@ class ScenarioEnvironment:
         self.goalPoint = None
         self.trajectory_list = None
         self.rotated_trajectory_list = None
+        self.agent_transform = None
 
         self.s_width = s_width
         self.s_height = s_height
@@ -86,7 +87,7 @@ class ScenarioEnvironment:
 
         self.settings = None
         self.time_start = None
-
+        
         # Synchronous mode + fixed time-step. The client will rule the simulation. The time step will be fixed. 
         # The server will not compute the following step until the client sends a tick. This is the best mode when synchrony and precision is relevant. 
         # Especially when dealing with slow clients or different elements retrieving information.
@@ -202,24 +203,24 @@ class ScenarioEnvironment:
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
-        # if action == 0:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=0))
-        # elif action == 1:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=-1))
-        # elif action == 2:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=1))
-        # elif action == 3:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=0.5, steer=0))
-        # elif action == 4:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=0.5, steer=-1))
-        # elif action == 5:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=0.5, steer=1))
-        # elif action == 6:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=0))
-        # elif action == 7:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=-1))
-        # elif action == 8:
-        #     self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
+        if action == 0:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=0))
+        elif action == 1:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=-1))
+        elif action == 2:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=1))
+        elif action == 3:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=0.5, steer=0))
+        elif action == 4:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=0.5, steer=-1))
+        elif action == 5:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=0.5, steer=1))
+        elif action == 6:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=0))
+        elif action == 7:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=-1))
+        elif action == 8:
+            self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
 
         # Get time
         run_time = self.fps_counter * FIXED_DELTA_SECONDS
@@ -233,7 +234,7 @@ class ScenarioEnvironment:
             gp = self.goalPointList[x]
             p_ego = self.get_Vehicle_positionVec()[:2]
             dist = np.linalg.norm(gp-p_ego)
-            if dist > 1.5:
+            if dist > 1.:
                 tmp_goalList.append(gp)
             else:
                 wp_reward += 1
@@ -444,19 +445,19 @@ class ScenarioEnvironment:
 
     # create a total minimap
     def createMiniMap(self):
-        agent = self.get_Vehicle_transform()
+        # agent = self.get_Vehicle_transform()
+        agent = self.agent_transform #synch with image
         p_agent = np.array([agent.location.x, agent.location.y])
         r_agent = agent.rotation.yaw
         # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
         p_agent[1] = p_agent[1] * (-1)
 
+
+        rotation = (r_agent - self.latest_rotation) * (-1)
+        # self.latest_rotation = r_agent
         
-        rotation = (r_agent - self.latest_rotation) * (-1) * 0.5
-        rotation = 10
-        self.latest_rotation = r_agent
-        
-        p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation)
-        self.rotated_trajectory_list = self.rotate_Map(self.roateted_agent_spawn, self.rotated_trajectory_list, rotation)
+        p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation + rotation)
+        tra_rotated = self.rotate_Map(self.roateted_agent_spawn, self.rotated_trajectory_list, rotation)
 
         # trajectory_rotated = self.rotated_trajectory_list
         # print(trajectory_rotated)
@@ -464,9 +465,9 @@ class ScenarioEnvironment:
         plt.style.use('dark_background')
         fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
         plt.axis("off")
-        plt.plot(self.rotated_trajectory_list[:,0], self.rotated_trajectory_list[:,1], color="white", lw=8)
+        plt.plot(tra_rotated[:,0], tra_rotated[:,1], color="white", lw=8)
         plt.plot(p_agent[0], p_agent[1], color="blue", marker='^', markersize=20)
-        plt.plot(self.rotated_trajectory_list[-1][0], self.rotated_trajectory_list[-1][1], color="red", marker='o', markersize=12)
+        plt.plot(tra_rotated[-1][0], tra_rotated[-1][1], color="red", marker='o', markersize=12)
 
         # set axis so that car starts in the middle
         # plt.xlim(self.xAxis_min, self.xAxis_max)
@@ -625,6 +626,7 @@ class ScenarioEnvironment:
     def get_observation(self):
         """ Observations in PyTorch format BCHW """
         frame = self.observation
+        self.agent_transform = self.get_Vehicle_transform()
         frame = frame.astype(np.float32) / 255
         frame = self.arrange_colorchannels(frame)
 
