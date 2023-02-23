@@ -32,7 +32,7 @@ CAM_HEIGHT = 20.5
 ROTATION = -70
 CAM_OFFSET = 18.
 ZOOM = 130
-ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-10_13:37/"
+ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-23_01:46/"
 # ROOT_STORAGE_PATH = "./scenario_sets/"
 # MAP_SET = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
 MAP_SET = ["Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt","Town01_Opt","Town01_Opt"]
@@ -141,7 +141,7 @@ class ScenarioPlanner:
         print(f"~~~~~~~~~~~~~~\n# Collecting {amount} scenarios among world: {self.world} \n~~~~~~~~~~~~~~")
         scenario_set = {}
         timestr = time.strftime("%Y-%m-%d_%H:%M")
-        chunk_num = 504
+        chunk_num = 536
         # storagePath = self.create_Storage()
         storagePath = ROOT_STORAGE_PATH
 
@@ -149,7 +149,7 @@ class ScenarioPlanner:
                             cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
         env.init_ego()
 
-        for x in range(9001,amount):
+        for x in range(5361,amount):
 
             # add to dict
             s_dict, snapshot = self.generateScenario(env)

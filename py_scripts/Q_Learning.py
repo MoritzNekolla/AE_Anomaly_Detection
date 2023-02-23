@@ -37,9 +37,9 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-# HOST = "tks-hubbard.fzi.de"
+HOST = "tks-hubbard.fzi.de"
 # HOST = "localhost"
-HOST = "ids-ford.fzi.de"
+# HOST = "ids-ford.fzi.de"
 
 PORT_LIST = [2200,2300,2400,2500]
 
@@ -117,6 +117,7 @@ def main(withAE, concatAE, clearmlOn):
         #     del env
         #     env, current_port, port_list = conncet_to_carla(settings, port_list, current_port)
         #     env.init_ego(car_type=settings.car_type)
+        scenario_index = 4
         print(f"Episode: {i} | Scenario_index: {scenario_index}")
         reward_per_episode = 0
         n_frame = 1
