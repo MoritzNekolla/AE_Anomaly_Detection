@@ -166,8 +166,8 @@ def main(withAE, concatAE, clearmlOn):
         r_fwd_list = []
 
         obs_current = torch.unsqueeze(torch.as_tensor(obs_current), 0)
-        t_0 = obs_current
-        t_1 = obs_current
+        # t_0 = obs_current
+        # t_1 = obs_current
 
         while True:
             fwdPass = time.time()
@@ -175,7 +175,7 @@ def main(withAE, concatAE, clearmlOn):
             chw_list.append(obs_current)
 
             #Temporal stacking
-            obs_temporal = torch.cat((t_0, t_1, obs_current), dim=2)
+            # obs_temporal = torch.cat((t_0, t_1, obs_current), dim=2)
             # print(obs_temporal.size())
 
             # batch shape
@@ -186,9 +186,11 @@ def main(withAE, concatAE, clearmlOn):
             # Perform action on observation and buildup replay memory
 
             if i % VIDEO_EVERY == 0:
-                action = trainer.select_action(obs_temporal, 0)
+                # action = trainer.select_action(obs_temporal, 0)
+                action = trainer.select_action(obs_current, 0)
             else:
-                action = trainer.select_action(obs_temporal, epsilon)
+                # action = trainer.select_action(obs_temporal, epsilon)
+                action = trainer.select_action(obs_current, epsilon)
 
             env.tick_world()
             obs_next, reward, done, crashed, succeed = env.step(action)
@@ -233,13 +235,14 @@ def main(withAE, concatAE, clearmlOn):
                 obs_next = torch.unsqueeze(torch.as_tensor(obs_next), 0)
 
                 # Temporal stacking
-                obs_next_temporal = torch.cat((t_1, obs_current, obs_next), dim=2)
+                # obs_next_temporal = torch.cat((t_1, obs_current, obs_next), dim=2)
             
             # Python tuples () https://www.w3schools.com/python/python_tuples.asp
-            trainer.replay_memory.push(obs_temporal, action, obs_next_temporal, reward_torch, done)
+            # trainer.replay_memory.push(obs_temporal, action, obs_next_temporal, reward_torch, done)
+            trainer.replay_memory.push(obs_current, action, obs_next, reward_torch, done)
             
-            t_0 = t_1
-            t_1 = obs_current
+            # t_0 = t_1
+            # t_1 = obs_current
             obs_current = obs_next
 
             # Optimization on policy model (I believe this could run in parallel to the data collection task)
