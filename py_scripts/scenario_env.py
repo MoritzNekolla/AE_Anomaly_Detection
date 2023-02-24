@@ -141,6 +141,7 @@ class ScenarioEnvironment:
 
         # goal_point_list (for reward calculation)
         self.goalPointList = self.trajectory_list
+        self.numReachedPoints = 0
 
         # Spawn vehicle
         a_location = carla.Location(self.settings.agent.spawn_point.location.x, self.settings.agent.spawn_point.location.y, self.settings.agent.spawn_point.location.z)
@@ -222,7 +223,8 @@ class ScenarioEnvironment:
         elif action == 8:
             self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
 
-        ego_transform = self.get_Vehicle_transform()
+        # ego_transform = self.get_Vehicle_transform()
+        ego_transform = self.agent_transform
         p_ego = np.array([ego_transform.location.x, ego_transform.location.y])
         # Get time
         run_time = self.fps_counter * FIXED_DELTA_SECONDS
@@ -231,15 +233,16 @@ class ScenarioEnvironment:
 
         # waypoint reward
         wp_reward = 0
-        # tmp_goalList = []
-        # for x in range(len(self.goalPointList)):
-        #     gp = self.goalPointList[x]
-        #     dist = np.linalg.norm(gp-p_ego)
-        #     if dist > 1.:
-        #         tmp_goalList.append(gp)
-        #     else:
-        #         wp_reward += 1
-        # self.goalPointList = tmp_goalList
+        tmp_goalList = []
+        for x in range(len(self.goalPointList)):
+            gp = self.goalPointList[x]
+            dist = np.linalg.norm(gp-p_ego)
+            if dist > 1.5:
+                tmp_goalList.append(gp)
+            else:
+                wp_reward += 1
+                self.numReachedPoints += 1
+        self.goalPointList = tmp_goalList
 
         # Get velocity of vehicle
         v = self.vehicle.get_velocity()
@@ -263,18 +266,20 @@ class ScenarioEnvironment:
         # else:
         #     velocity_reward = 1
 
-        ## stay on lane
+        # stay on road
+        for x in range(len(self.trajectory_list)):
+            gp = self.trajectory_list[x]
+            distance_ego = np.linalg.norm(gp-p_ego)
         # ego_map_point = self.getEgoWaypoint()
-        # ego_point = self.get_Vehicle_transform()
-        # distance_ego = ego_point.location.distance(ego_map_point.transform.location)
-        # out_of_map = 0
-        # if distance_ego > 1.:
-        #     out_of_map = -1
+        # distance_ego = ego_transform.location.distance(ego_map_point.transform.location)
+        out_of_map = 0
+        if distance_ego > 1.5:
+            out_of_map = -1
 
         # reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
         # reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
-        reward_total =  wp_reward + 200*reward_collision + 0.5*velocity_reward - 0.1 # + reward_time
+        reward_total =  10*wp_reward + 200*reward_collision + 0.5*velocity_reward + 0.1*out_of_map - 0.1 # + reward_time
 
         if goal_distance < 2.:
             done = True
@@ -451,85 +456,62 @@ class ScenarioEnvironment:
         
         return np.array(tmp)
 
-    # # create a total minimap
-    # def createMiniMap(self):
-    #     # agent = self.get_Vehicle_transform()
-    #     agent = self.agent_transform #synch with image
-    #     p_agent = np.array([agent.location.x, agent.location.y])
-    #     r_agent = agent.rotation.yaw
-    #     # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
-    #     p_agent[1] = p_agent[1] * (-1)
-
-
-    #     rotation = (r_agent - self.latest_rotation) * (-1)
-    #     # self.latest_rotation = r_agent
-        
-    #     p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation + rotation)
-    #     tra_rotated = self.rotate_Map(self.roateted_agent_spawn, self.rotated_trajectory_list, rotation)
-
-    #     # trajectory_rotated = self.rotated_trajectory_list
-    #     # print(trajectory_rotated)
-
-    #     plt.style.use('dark_background')
-    #     fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
-    #     plt.axis("off")
-    #     plt.plot(tra_rotated[:,0], tra_rotated[:,1], color="white", lw=8)
-    #     plt.plot(p_agent[0], p_agent[1], color="blue", marker='^', markersize=20)
-    #     plt.plot(tra_rotated[-1][0], tra_rotated[-1][1], color="red", marker='o', markersize=12)
-
-    #     # set axis so that car starts in the middle
-    #     # plt.xlim(self.xAxis_min, self.xAxis_max)
-    #     # plt.ylim(self.yAxis_min, self.yAxis_max)
-
-    #     y_dim = 20.5
-    #     x_dim = (y_dim) / 2
-    #     plt.xlim(p_agent[0] - x_dim, p_agent[0] + x_dim)
-    #     plt.ylim(p_agent[1], p_agent[1] + y_dim)
-    #     plt.tight_layout(pad=0.)
-
-    #     miniMap = plotToImage(fig)
-    #     plt.close()
-    #     return miniMap.astype("float32") / 255
-
     # create a total minimap
     def createMiniMap(self):
-        p_agent = self.get_Vehicle_positionVec()[:2]
+        # agent = self.get_Vehicle_transform()
+        agent = self.agent_transform #synch with image
+        p_agent = np.array([agent.location.x, agent.location.y])
+        r_agent = agent.rotation.yaw
         # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
-        p_agent[1] = p_agent[1] * (-1) 
-        p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation)
-        # self.trajectory_list = self.rotate_Map(p_agent, self.roa)
-        
+        p_agent[1] = p_agent[1] * (-1)
 
+
+        rotation = (r_agent - self.latest_rotation) * (-1)
+        # self.latest_rotation = r_agent
+        
+        p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation + rotation)
+        tra_rotated = self.rotate_Map(self.roateted_agent_spawn, self.rotated_trajectory_list, rotation)
+
+        # trajectory_rotated = self.rotated_trajectory_list
+        # print(trajectory_rotated)
 
         plt.style.use('dark_background')
         fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
         plt.axis("off")
-        plt.plot(self.rotated_trajectory_list[:,0], self.rotated_trajectory_list[:,1], color="white", lw=3)
-        plt.plot(p_agent[0], p_agent[1], color="blue", marker='<', markersize=12)
-        plt.plot(self.rotated_trajectory_list[-1][0], self.rotated_trajectory_list[-1][1], color="red", marker='o', markersize=12)
+        plt.plot(tra_rotated[:,0], tra_rotated[:,1], color="white", lw=8)
+        plt.plot(p_agent[0], p_agent[1], color="blue", marker='^', markersize=20)
+        plt.plot(tra_rotated[-1][0], tra_rotated[-1][1], color="red", marker='o', markersize=12)
 
         # set axis so that car starts in the middle
-        plt.xlim(self.xAxis_min, self.xAxis_max)
-        plt.ylim(self.yAxis_min, self.yAxis_max)
+        # plt.xlim(self.xAxis_min, self.xAxis_max)
+        # plt.ylim(self.yAxis_min, self.yAxis_max)
+
+        y_dim = 20.5
+        x_dim = (y_dim) / 2
+        plt.xlim(p_agent[0] - x_dim, p_agent[0] + x_dim)
+        plt.ylim(p_agent[1], p_agent[1] + y_dim)
+        plt.tight_layout(pad=0.)
 
         miniMap = plotToImage(fig)
         plt.close()
         return miniMap.astype("float32") / 255
 
-        # create a total minimap
+    # # create a total minimap
     # def createMiniMap(self):
     #     p_agent = self.get_Vehicle_positionVec()[:2]
-    #     agetn_transform = self.get_Vehicle_transform()
-    #     fwdVector = agetn_transform.rotation.get_forward_vector()
-
+    #     # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
+    #     p_agent[1] = p_agent[1] * (-1) 
+    #     p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation)
+    #     # self.trajectory_list = self.rotate_Map(p_agent, self.roa)
+        
 
 
     #     plt.style.use('dark_background')
     #     fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
     #     plt.axis("off")
-    #     plt.plot(self.trajectory_list[:,0], self.trajectory_list[:,1], color="white", lw=3)
+    #     plt.plot(self.rotated_trajectory_list[:,0], self.rotated_trajectory_list[:,1], color="white", lw=3)
     #     plt.plot(p_agent[0], p_agent[1], color="blue", marker='<', markersize=12)
-    #     plt.plot(self.trajectory_list[-1][0], self.trajectory_list[-1][1], color="red", marker='o', markersize=12)
+    #     plt.plot(self.rotated_trajectory_list[-1][0], self.rotated_trajectory_list[-1][1], color="red", marker='o', markersize=12)
 
     #     # set axis so that car starts in the middle
     #     plt.xlim(self.xAxis_min, self.xAxis_max)
@@ -538,6 +520,29 @@ class ScenarioEnvironment:
     #     miniMap = plotToImage(fig)
     #     plt.close()
     #     return miniMap.astype("float32") / 255
+
+    #     # create a total minimap
+    # # def createMiniMap(self):
+    # #     p_agent = self.get_Vehicle_positionVec()[:2]
+    # #     agetn_transform = self.get_Vehicle_transform()
+    # #     fwdVector = agetn_transform.rotation.get_forward_vector()
+
+
+
+    # #     plt.style.use('dark_background')
+    # #     fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
+    # #     plt.axis("off")
+    # #     plt.plot(self.trajectory_list[:,0], self.trajectory_list[:,1], color="white", lw=3)
+    # #     plt.plot(p_agent[0], p_agent[1], color="blue", marker='<', markersize=12)
+    # #     plt.plot(self.trajectory_list[-1][0], self.trajectory_list[-1][1], color="red", marker='o', markersize=12)
+
+    # #     # set axis so that car starts in the middle
+    # #     plt.xlim(self.xAxis_min, self.xAxis_max)
+    # #     plt.ylim(self.yAxis_min, self.yAxis_max)
+
+    # #     miniMap = plotToImage(fig)
+    # #     plt.close()
+    # #     return miniMap.astype("float32") / 255
 
     # set axis so that car starts in the middle
     def setAxis(self):
@@ -569,6 +574,9 @@ class ScenarioEnvironment:
 # -- Getter --------------------------------------------------------------------
 # ==============================================================================
     
+    def getReachedPoints(self):
+        return self.numReachedPoints
+
     def getGoalTrajectory(self):
         return self.trajectory_list
     
@@ -595,7 +603,8 @@ class ScenarioEnvironment:
         return w_dict
 
     def getEgoWaypoint(self):
-        vehicle_loc = self.vehicle.get_location()
+        # vehicle_loc = self.vehicle.get_location()
+        vehicle_loc = self.agent_transform.location
         wp = self.map.get_waypoint(vehicle_loc, project_to_road=True,
                       lane_type=carla.LaneType.Driving)
 
@@ -634,7 +643,7 @@ class ScenarioEnvironment:
     def get_observation(self):
         """ Observations in PyTorch format BCHW """
         frame = self.observation
-        # self.agent_transform = self.get_Vehicle_transform()
+        self.agent_transform = self.get_Vehicle_transform()
         frame = frame.astype(np.float32) / 255
         frame = self.arrange_colorchannels(frame)
 

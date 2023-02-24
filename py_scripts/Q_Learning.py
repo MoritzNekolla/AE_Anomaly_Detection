@@ -37,7 +37,7 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hazard.fzi.de"
+HOST = "tks-iris.fzi.de"
 # HOST = "localhost"
 # HOST = "ids-ford.fzi.de"
 
@@ -253,6 +253,7 @@ def main(withAE, concatAE, clearmlOn):
             r_fwd_list.append(runtime_end)
 
             if done:
+                numReachPoints = env.getReachedPoints()
                 end = time.time()
                 duration = end - start
                 duration_per_episode_list.append(duration)
@@ -283,6 +284,9 @@ def main(withAE, concatAE, clearmlOn):
                 succeed_scalars = {
                     'succed': succeed
                 }
+                reached_points = {
+                    '# points': numReachPoints
+                }
                 runtime_scalars = {
                     'avg': np.average(runtime_forwardpass_list),
                     'runtime': np.average(r_fwd_list)
@@ -293,6 +297,7 @@ def main(withAE, concatAE, clearmlOn):
                 writer.add_scalars("Frame", frame_scalars, i)
                 writer.add_scalars("Crashed", crash_scalars, i)
                 writer.add_scalars("Succeed", succeed_scalars, i)
+                writer.add_scalars("Reached_waypoints", reached_points, i)
                 writer.add_scalars("Runtime_per_forward_pass", runtime_scalars, i)
 
                 if reward_per_episode > reward_best:
