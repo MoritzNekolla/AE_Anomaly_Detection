@@ -229,16 +229,16 @@ class ScenarioEnvironment:
 
         # waypoint reward
         wp_reward = 0
-        tmp_goalList = []
-        for x in range(len(self.goalPointList)):
-            gp = self.goalPointList[x]
-            p_ego = self.get_Vehicle_positionVec()[:2]
-            dist = np.linalg.norm(gp-p_ego)
-            if dist > 1.:
-                tmp_goalList.append(gp)
-            else:
-                wp_reward += 1
-        self.goalPointList = tmp_goalList
+        # tmp_goalList = []
+        # for x in range(len(self.goalPointList)):
+        #     gp = self.goalPointList[x]
+        #     p_ego = self.get_Vehicle_positionVec()[:2]
+        #     dist = np.linalg.norm(gp-p_ego)
+        #     if dist > 1.:
+        #         tmp_goalList.append(gp)
+        #     else:
+        #         wp_reward += 1
+        # self.goalPointList = tmp_goalList
 
         # Get velocity of vehicle
         v = self.vehicle.get_velocity()
@@ -450,72 +450,72 @@ class ScenarioEnvironment:
         
         return np.array(tmp)
 
-    # create a total minimap
-    def createMiniMap(self):
-        # agent = self.get_Vehicle_transform()
-        agent = self.agent_transform #synch with image
-        p_agent = np.array([agent.location.x, agent.location.y])
-        r_agent = agent.rotation.yaw
-        # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
-        p_agent[1] = p_agent[1] * (-1)
-
-
-        rotation = (r_agent - self.latest_rotation) * (-1)
-        # self.latest_rotation = r_agent
-        
-        p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation + rotation)
-        tra_rotated = self.rotate_Map(self.roateted_agent_spawn, self.rotated_trajectory_list, rotation)
-
-        # trajectory_rotated = self.rotated_trajectory_list
-        # print(trajectory_rotated)
-
-        plt.style.use('dark_background')
-        fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
-        plt.axis("off")
-        plt.plot(tra_rotated[:,0], tra_rotated[:,1], color="white", lw=8)
-        plt.plot(p_agent[0], p_agent[1], color="blue", marker='^', markersize=20)
-        plt.plot(tra_rotated[-1][0], tra_rotated[-1][1], color="red", marker='o', markersize=12)
-
-        # set axis so that car starts in the middle
-        # plt.xlim(self.xAxis_min, self.xAxis_max)
-        # plt.ylim(self.yAxis_min, self.yAxis_max)
-
-        y_dim = 20.5
-        x_dim = (y_dim) / 2
-        plt.xlim(p_agent[0] - x_dim, p_agent[0] + x_dim)
-        plt.ylim(p_agent[1], p_agent[1] + y_dim)
-        plt.tight_layout(pad=0.)
-
-        miniMap = plotToImage(fig)
-        plt.close()
-        return miniMap.astype("float32") / 255
-
     # # create a total minimap
     # def createMiniMap(self):
-    #     p_agent = self.get_Vehicle_positionVec()[:2]
+    #     # agent = self.get_Vehicle_transform()
+    #     agent = self.agent_transform #synch with image
+    #     p_agent = np.array([agent.location.x, agent.location.y])
+    #     r_agent = agent.rotation.yaw
     #     # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
-    #     p_agent[1] = p_agent[1] * (-1) 
-    #     p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation)
-    #     # self.trajectory_list = self.rotate_Map(p_agent, self.roa)
-        
+    #     p_agent[1] = p_agent[1] * (-1)
 
+
+    #     rotation = (r_agent - self.latest_rotation) * (-1)
+    #     # self.latest_rotation = r_agent
+        
+    #     p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation + rotation)
+    #     tra_rotated = self.rotate_Map(self.roateted_agent_spawn, self.rotated_trajectory_list, rotation)
+
+    #     # trajectory_rotated = self.rotated_trajectory_list
+    #     # print(trajectory_rotated)
 
     #     plt.style.use('dark_background')
     #     fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
     #     plt.axis("off")
-    #     plt.plot(self.rotated_trajectory_list[:,0], self.rotated_trajectory_list[:,1], color="white", lw=3)
-    #     plt.plot(p_agent[0], p_agent[1], color="blue", marker='<', markersize=12)
-    #     plt.plot(self.rotated_trajectory_list[-1][0], self.rotated_trajectory_list[-1][1], color="red", marker='o', markersize=12)
+    #     plt.plot(tra_rotated[:,0], tra_rotated[:,1], color="white", lw=8)
+    #     plt.plot(p_agent[0], p_agent[1], color="blue", marker='^', markersize=20)
+    #     plt.plot(tra_rotated[-1][0], tra_rotated[-1][1], color="red", marker='o', markersize=12)
 
     #     # set axis so that car starts in the middle
-    #     plt.xlim(self.xAxis_min, self.xAxis_max)
-    #     plt.ylim(self.yAxis_min, self.yAxis_max)
+    #     # plt.xlim(self.xAxis_min, self.xAxis_max)
+    #     # plt.ylim(self.yAxis_min, self.yAxis_max)
+
+    #     y_dim = 20.5
+    #     x_dim = (y_dim) / 2
+    #     plt.xlim(p_agent[0] - x_dim, p_agent[0] + x_dim)
+    #     plt.ylim(p_agent[1], p_agent[1] + y_dim)
+    #     plt.tight_layout(pad=0.)
 
     #     miniMap = plotToImage(fig)
     #     plt.close()
     #     return miniMap.astype("float32") / 255
 
-    #     # create a total minimap
+    # create a total minimap
+    def createMiniMap(self):
+        p_agent = self.get_Vehicle_positionVec()[:2]
+        # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
+        p_agent[1] = p_agent[1] * (-1) 
+        p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation)
+        # self.trajectory_list = self.rotate_Map(p_agent, self.roa)
+        
+
+
+        plt.style.use('dark_background')
+        fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
+        plt.axis("off")
+        plt.plot(self.rotated_trajectory_list[:,0], self.rotated_trajectory_list[:,1], color="white", lw=3)
+        plt.plot(p_agent[0], p_agent[1], color="blue", marker='<', markersize=12)
+        plt.plot(self.rotated_trajectory_list[-1][0], self.rotated_trajectory_list[-1][1], color="red", marker='o', markersize=12)
+
+        # set axis so that car starts in the middle
+        plt.xlim(self.xAxis_min, self.xAxis_max)
+        plt.ylim(self.yAxis_min, self.yAxis_max)
+
+        miniMap = plotToImage(fig)
+        plt.close()
+        return miniMap.astype("float32") / 255
+
+        # create a total minimap
     # def createMiniMap(self):
     #     p_agent = self.get_Vehicle_positionVec()[:2]
     #     agetn_transform = self.get_Vehicle_transform()
@@ -633,7 +633,7 @@ class ScenarioEnvironment:
     def get_observation(self):
         """ Observations in PyTorch format BCHW """
         frame = self.observation
-        self.agent_transform = self.get_Vehicle_transform()
+        # self.agent_transform = self.get_Vehicle_transform()
         frame = frame.astype(np.float32) / 255
         frame = self.arrange_colorchannels(frame)
 

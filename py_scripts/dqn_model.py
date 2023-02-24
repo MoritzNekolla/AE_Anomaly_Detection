@@ -75,10 +75,10 @@ class DQN_DQN(nn.Module):
         linear_input_size = convw6 * convh6 * 32                    # width * height * channels
         print(linear_input_size)
 
-        self.concat = nn.Linear(linear_input_size * 3, linear_input_size)
+        self.concat = nn.Linear(linear_input_size * 3, int(linear_input_size/2))
 
 
-        self.head = nn.Linear(linear_input_size, N_ACTIONS)
+        self.head = nn.Linear(int(linear_input_size/2), N_ACTIONS)
 
     def forward(self, t):
         '''Called with either one element to determine next action, or a batch during optimization'''
@@ -194,10 +194,10 @@ class DQN(nn.Module):
         linear_input_size = convw6 * convh6 * 32                    # width * height * channels
         print(f"Latent-size: {linear_input_size}")
 
-        self.concat = nn.Linear(linear_input_size * 2, linear_input_size)
+        self.concat = nn.Linear(linear_input_size * 2, int(linear_input_size/2))
 
 
-        self.head = nn.Linear(linear_input_size, N_ACTIONS)
+        self.head = nn.Linear(int(linear_input_size/2), N_ACTIONS)
 
     def forward(self, t):
         '''Called with either one element to determine next action, or a batch during optimization'''
