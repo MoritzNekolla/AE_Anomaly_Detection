@@ -37,7 +37,7 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hubbard.fzi.de"
+HOST = "tks-hummer.fzi.de"
 # HOST = "localhost"
 # HOST = "ids-ford.fzi.de"
 
@@ -494,8 +494,8 @@ def init_clearML(withAE, concatAE, clearmlOn):
             )
     
     parameters = {
-        "scenario_path": PATH_SCENARIOS
-
+        "scenario_path": PATH_SCENARIOS,
+        "host": HOST
     }
     #start ClearML logging
     task.connect(parameters)
