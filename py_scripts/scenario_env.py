@@ -222,17 +222,18 @@ class ScenarioEnvironment:
         elif action == 8:
             self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
 
+        ego_transform = self.get_Vehicle_transform()
+        p_ego = np.array([ego_transform.location.x, ego_transform.location.y])
         # Get time
         run_time = self.fps_counter * FIXED_DELTA_SECONDS
         # Get goal distance
-        goal_distance = self.goalPoint.distance(self.get_Vehicle_transform().location)
+        goal_distance = self.goalPoint.distance(ego_transform.location)
 
         # waypoint reward
         wp_reward = 0
         # tmp_goalList = []
         # for x in range(len(self.goalPointList)):
         #     gp = self.goalPointList[x]
-        #     p_ego = self.get_Vehicle_positionVec()[:2]
         #     dist = np.linalg.norm(gp-p_ego)
         #     if dist > 1.:
         #         tmp_goalList.append(gp)
