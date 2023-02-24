@@ -37,7 +37,7 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hummer.fzi.de"
+HOST = "tks-hertz.fzi.de"
 # HOST = "localhost"
 # HOST = "ids-ford.fzi.de"
 

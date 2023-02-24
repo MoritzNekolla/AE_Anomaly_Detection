@@ -419,6 +419,13 @@ class ScenarioEnvironment:
             point = np.array([point.x, point.y])
             trajectory.append(point)
         
+        # discard every second point for computational acceleration
+        tmp_list = []
+        for x in range(0,len(trajectory),2):
+            tmp_list.append(trajectory[x])
+        if len(trajectory) % 2 == 0: tmp_list.append(trajectory[-1])
+        trajectory = tmp_list
+
         trajectory = np.array(trajectory)
         old_trajectory = trajectory
         # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
