@@ -5,7 +5,7 @@ EPS_START = 1
 EPS_END = 0.01
 EPS_DECAY = 0.9999
 TARGET_UPDATE = 10
-REPLAY_MEMORY_SIZE = 10_000  # If I keep replay buffer (partly) after updating value function, I am OFF-POLICY. If I always generate new data based on my value function, I am ON-POLICY
+REPLAY_MEMORY_SIZE = 5_000  # If I keep replay buffer (partly) after updating value function, I am OFF-POLICY. If I always generate new data based on my value function, I am ON-POLICY
 # One step updates: Here, on- and off-policy are mathematically the same (magic)
 # n-step updates: Using old data becomes mathematically wrong and is thus forbidden. You CAN make it off-policy, but then you
 #    need to include likelihoods. You have to a) check with which likelihood your old policy chose an action. Then b) you check how

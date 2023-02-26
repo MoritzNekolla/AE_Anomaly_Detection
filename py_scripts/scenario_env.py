@@ -204,6 +204,7 @@ class ScenarioEnvironment:
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
+        action = 0
         if action == 0:
             self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=0))
         elif action == 1:
@@ -231,7 +232,7 @@ class ScenarioEnvironment:
         # Get goal distance
         goal_distance = self.goalPoint.distance(ego_transform.location)
 
-        MAX_DEVIATION = 1.
+        MAX_DEVIATION = 2.
         # waypoint reward
         wp_reward = 0
         tmp_goalList = []
@@ -260,12 +261,10 @@ class ScenarioEnvironment:
             reward_collision = -1
             crashed = 1
 
-        velocity_reward = v_kmh / 40
-        if v_kmh > 40:
-            # velocity_reward = v_kmh / (80 - 3*v_kmh)
-            velocity_reward = -1
-        # else:
-        #     velocity_reward = 1
+        # velocity_reward = v_kmh / 40
+        # if v_kmh > 40:
+        #     # velocity_reward = v_kmh / (80 - 3*v_kmh)
+        #     velocity_reward = -1
 
         # stay on road
         min_dist = 99999
@@ -274,6 +273,8 @@ class ScenarioEnvironment:
             distance_ego = np.linalg.norm(gp-p_ego)
             if distance_ego < min_dist:
                 min_dist = distance_ego
+                if min_dist < MAX_DEVIATION:
+                    break
         # ego_map_point = self.getEgoWaypoint()
         # distance_ego = ego_transform.location.distance(ego_map_point.transform.location)
         out_of_map = 0
@@ -284,7 +285,7 @@ class ScenarioEnvironment:
         # reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
         # reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
-        reward_total =  10*wp_reward + 200*reward_collision + 0.*velocity_reward + 0.1*out_of_map - 0.1 # + reward_time
+        reward_total =  10*wp_reward + 200*reward_collision + 1*out_of_map - 0.1 # + reward_time + 0.*velocity_reward
 
         if goal_distance < 2.:
             done = True

@@ -37,9 +37,9 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-hawk.fzi.de"
+# HOST = "tks-holden.fzi.de"
 # HOST = "localhost"
-# HOST = "ids-ford.fzi.de"
+HOST = "ids-fiat.fzi.de"
 
 PORT_LIST = [2200,2300,2400,2500]
 
@@ -97,7 +97,7 @@ def main(withAE, concatAE, clearmlOn):
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
-    scenario_index = 0
+    scenario_index = 33
 
     epsilon = EPS_START
     reward_best = -1000
@@ -509,8 +509,8 @@ def init_clearML(withAE, concatAE, clearmlOn):
     task.connect(parameters)
     logger = task.get_logger()
     if clearmlOn:
-        # task.execute_remotely('rtx3090', clone=False, exit_process=True) 
-        task.execute_remotely('docker', clone=False, exit_process=True) 
+        task.execute_remotely('rtx3090', clone=False, exit_process=True) 
+        # task.execute_remotely('docker', clone=False, exit_process=True) 
 
     return task
 
