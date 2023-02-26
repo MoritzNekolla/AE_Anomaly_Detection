@@ -37,7 +37,7 @@ from training import EPS_START
 
 # The learned Q value rates (state,action) pairs
 # A CNN with a state input can rate possible actions, just as a classifier would
-HOST = "tks-iris.fzi.de"
+HOST = "tks-hawk.fzi.de"
 # HOST = "localhost"
 # HOST = "ids-ford.fzi.de"
 
@@ -509,7 +509,8 @@ def init_clearML(withAE, concatAE, clearmlOn):
     task.connect(parameters)
     logger = task.get_logger()
     if clearmlOn:
-        task.execute_remotely('rtx3090', clone=False, exit_process=True) 
+        # task.execute_remotely('rtx3090', clone=False, exit_process=True) 
+        task.execute_remotely('docker', clone=False, exit_process=True) 
 
     return task
 

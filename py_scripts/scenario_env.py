@@ -140,7 +140,7 @@ class ScenarioEnvironment:
         self.xAxis_min, self.xAxis_max, self.yAxis_min, self.yAxis_max = self.setAxis()
 
         # goal_point_list (for reward calculation)
-        self.goalPointList = self.trajectory_list
+        self.goalPointList = self.trajectory_list.copy()
         self.numReachedPoints = 0
 
         # Spawn vehicle
@@ -227,17 +227,18 @@ class ScenarioEnvironment:
         ego_transform = self.agent_transform
         p_ego = np.array([ego_transform.location.x, ego_transform.location.y])
         # Get time
-        run_time = self.fps_counter * FIXED_DELTA_SECONDS
+        # run_time = self.fps_counter * FIXED_DELTA_SECONDS
         # Get goal distance
         goal_distance = self.goalPoint.distance(ego_transform.location)
 
+        MAX_DEVIATION = 1.
         # waypoint reward
         wp_reward = 0
         tmp_goalList = []
         for x in range(len(self.goalPointList)):
             gp = self.goalPointList[x]
             dist = np.linalg.norm(gp-p_ego)
-            if dist > 1.5:
+            if dist > MAX_DEVIATION:
                 tmp_goalList.append(gp)
             else:
                 wp_reward += 1
@@ -267,19 +268,23 @@ class ScenarioEnvironment:
         #     velocity_reward = 1
 
         # stay on road
+        min_dist = 99999
         for x in range(len(self.trajectory_list)):
             gp = self.trajectory_list[x]
             distance_ego = np.linalg.norm(gp-p_ego)
+            if distance_ego < min_dist:
+                min_dist = distance_ego
         # ego_map_point = self.getEgoWaypoint()
         # distance_ego = ego_transform.location.distance(ego_map_point.transform.location)
         out_of_map = 0
-        if distance_ego > 1.5:
+        if min_dist > MAX_DEVIATION:
             out_of_map = -1
 
+        # print(min_dist)
         # reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
         # reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
-        reward_total =  10*wp_reward + 200*reward_collision + 0.5*velocity_reward + 0.1*out_of_map - 0.1 # + reward_time
+        reward_total =  10*wp_reward + 200*reward_collision + 0.*velocity_reward + 0.1*out_of_map - 0.1 # + reward_time
 
         if goal_distance < 2.:
             done = True
@@ -429,11 +434,12 @@ class ScenarioEnvironment:
         tmp_list = []
         for x in range(0,len(trajectory),2):
             tmp_list.append(trajectory[x])
+
         if len(trajectory) % 2 == 0: tmp_list.append(trajectory[-1])
         trajectory = tmp_list
 
         trajectory = np.array(trajectory)
-        old_trajectory = trajectory
+        old_trajectory = trajectory.copy()
         # carefull: mirroring the Y-axis to cope with carla coordinates (x=heading, y=rigth, z=up) 
         trajectory[:,1] = trajectory[:,1] * (-1)
 
