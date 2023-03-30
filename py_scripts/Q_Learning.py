@@ -1,7 +1,7 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-
+##
+# Training of the actual RL agents.
+# 3 Modes: Baseline, Enriched Reward, HeatMap
+##
 from operator import truediv
 import re
 import cv2
@@ -60,44 +60,45 @@ def main(withAE, concatAE, clearmlOn):
     port_list = PORT_LIST
     current_port = port_list.pop(0)
     day_count = time.time()
-    task = init_clearML(withAE, concatAE, clearmlOn)
+    task = init_clearML(withAE, concatAE, clearmlOn) # set up ClearML
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Running on: {HOST} with port: {current_port}")
     if device == "cpu": print("!!! device is CPU !!!")
 
     evaluater = None
-    if withAE:
+    if withAE: # baseline RL or agumented RL
         ae_model = AutoEncoder()
 
-        if clearmlOn:
+        if clearmlOn: # remote training or local training
             path = Dataset.get(dataset_id=CLEARML_PATH_MODEL).get_local_copy()
             ae_model.to(device)
             ae_model.load_state_dict(torch.load(path + "/model.pt"))
             evaluater = Evaluater(ae_model, device)
-        else:
+        else: 
             ae_model.to(device)
             ae_model.load_state_dict(torch.load(PATH_MODEL))
             evaluater = Evaluater(ae_model, device)
 
 
-    if withAE and not concatAE:
+    if withAE and not concatAE: # baseline RL or agumented RL
         DISTANCE_MATRIX = init_distance_matrices(EGO_X,EGO_Y)
         print(DISTANCE_MATRIX)
 
     writer = SummaryWriter()
-    # env = ScenarioEnvironment(host="tks-fly.fzi.de", port=2000)
-    #env = ScenarioEnvironment(world="Town01_Opt", host="localhost", port=2100, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130, random_spawn=False)
-    if clearmlOn:
+
+    # get the scenario settings 
+    if clearmlOn: # remote training or local training
         path = Dataset.get(dataset_id=CLEARML_PATH_SCENARIOS).get_local_copy()
         settings = ScenarioPlanner.load_settings(path)
     else:
         settings = ScenarioPlanner.load_settings(PATH_SCENARIOS)
 
+    # create world with settings
     env = ScenarioEnvironment(world=settings.world, host=HOST, port=current_port, s_width=256, s_height=256, cam_height=4.5, cam_rotation=-90, cam_zoom=130)
     env.init_ego(car_type=settings.car_type)
 
     trainer = Training(writer, device, concatAE=concatAE)
-    scenario_index = 33
+    scenario_index = 0
 
     epsilon = EPS_START
     reward_best = -1000
@@ -110,18 +111,11 @@ def main(withAE, concatAE, clearmlOn):
     end_point = None
 
     for i in range(N_EPISODES):
-        # if time.time() - day_count > 180: # 86.400 = 24 h
-        #     print("Switching to new server...")
-        #     day_count = time.time()
-        #     env.deleteActors()
-        #     del env
-        #     env, current_port, port_list = conncet_to_carla(settings, port_list, current_port)
-        #     env.init_ego(car_type=settings.car_type)
-        # scenario_index = 4
         print(f"Episode: {i} | Scenario_index: {scenario_index}")
         reward_per_episode = 0
         n_frame = 1
 
+        # spawn car. Note this can sometimes fail, therefore we iteratively try to spawn the car until it works
         spawn_worked = False
         counter = 0
         while spawn_worked == False:
@@ -139,11 +133,13 @@ def main(withAE, concatAE, clearmlOn):
                 
 
         start = time.time()
-        # env.spawn_anomaly_alongRoad(max_numb=20)
+
         spawn_point = np.array([scenario.agent.spawn_point.location.x, scenario.agent.spawn_point.location.y, scenario.agent.spawn_point.location.z])
         goal_point = np.array([scenario.goal_point.location.x, scenario.goal_point.location.y, scenario.goal_point.location.z])
 
+        # get first observation from the environment
         obs_current = env.get_observation()
+        # get first minimap for the observation
         minimap = env.createMiniMap()
         obs_current = obs_current[0] #no segemntation
 
@@ -154,13 +150,11 @@ def main(withAE, concatAE, clearmlOn):
         
         obs_current = np.transpose(obs_current, (2,0,1))
         minimap = np.transpose(minimap, (2,0,1))
-        # add heat and minimap
+
+        # add heat and minimap (stack them)
         if concatAE: obs_current = np.array([obs_current, heatMap, minimap])
         else : obs_current = np.array([obs_current, minimap])
 
-        # # batch shape
-        # obs_current = np.array([obs_current])
-        # obs_current = torch.as_tensor(obs_current)
 
         chw_list = []
         r_fwd_list = []
@@ -174,17 +168,7 @@ def main(withAE, concatAE, clearmlOn):
             # for video
             chw_list.append(obs_current)
 
-            #Temporal stacking
-            # obs_temporal = torch.cat((t_0, t_1, obs_current), dim=2)
-            # print(obs_temporal.size())
-
-            # batch shape
-            # obs_current = torch.unsqueeze(obs_current, 0)
-            # obs_current = np.array([obs_current])
-            # obs_current = torch.as_tensor(obs_current)
-
             # Perform action on observation and buildup replay memory
-
             if i % VIDEO_EVERY == 0:
                 # action = trainer.select_action(obs_temporal, 0)
                 action = trainer.select_action(obs_current, 0)
@@ -192,8 +176,9 @@ def main(withAE, concatAE, clearmlOn):
                 # action = trainer.select_action(obs_temporal, epsilon)
                 action = trainer.select_action(obs_current, epsilon)
 
-            env.tick_world()
+            # execute action
             obs_next, reward, done, crashed, succeed = env.step(action)
+            env.tick_world()
             obs_next = obs_next[0] #no segemntation
             minimap = env.createMiniMap()
 
@@ -221,11 +206,6 @@ def main(withAE, concatAE, clearmlOn):
                 end_point = env.get_Vehicle_positionVec()
                 obs_next = None
             else:
-                # if withAE:
-                #     # heatmap = evaluater.getHeatMap(obs_next)
-                #     detectionMap = evaluater.getheatMap(obs_next)
-                #     obs_next = np.hstack((obs_next, detectionMap))
-
                 obs_next = np.transpose(obs_next, (2,0,1))
                 minimap = np.transpose(minimap, (2,0,1))
                 # add minimap
@@ -234,15 +214,9 @@ def main(withAE, concatAE, clearmlOn):
                 # batch shape
                 obs_next = torch.unsqueeze(torch.as_tensor(obs_next), 0)
 
-                # Temporal stacking
-                # obs_next_temporal = torch.cat((t_1, obs_current, obs_next), dim=2)
-            
-            # Python tuples () https://www.w3schools.com/python/python_tuples.asp
-            # trainer.replay_memory.push(obs_temporal, action, obs_next_temporal, reward_torch, done)
             trainer.replay_memory.push(obs_current, action, obs_next, reward_torch, done)
             
-            # t_0 = t_1
-            # t_1 = obs_current
+
             obs_current = obs_next
 
             # Optimization on policy model (I believe this could run in parallel to the data collection task)
@@ -304,12 +278,6 @@ def main(withAE, concatAE, clearmlOn):
                     reward_best = reward_per_episode
                     name = f"Best | Scenario_{scenario_index}: "
                     save_video(chw_list, reward_best, i, writer, withAE, concatAE, name, evaluater)
-                    # tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
-                    # tchw_list = torch.squeeze(tchw_list)
-                    # name = "DQN Champ: " + str(reward_per_episode)
-                    # writer.add_video(
-                    #     tag=name, vid_tensor=tchw_list.unsqueeze(0), global_step=i
-                    # )  # Unsqueeze adds batch --> BTCHW
                     torch.save(trainer.policy_net.state_dict(), os.path.join(gettempdir(), "dqn_" + str(i) + ".pt"))
                 break
 
@@ -338,6 +306,7 @@ def main(withAE, concatAE, clearmlOn):
 
 # generate distance map from the center of the car to all other pixels in the space (works only in BEV)
 # remains static for the whole training since the car in the image is never moving
+# only for augmented RL!
 def init_distance_matrices(pos_x, pos_y):
     size = IM_WIDTH
     ring_count = size # we want to double the size. each ring adds a size of 2 
@@ -358,6 +327,7 @@ def init_distance_matrices(pos_x, pos_y):
 
     return distance_matrix
 
+# only for augmented RL
 def calcualte_enriched_reward(reward, detectionMap, distanceMap):
     if reward == -1 : return -1 # collision or timeout
 
@@ -413,12 +383,10 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name, eva
             seperator = np.zeros((3,256,2))
             seperator[:,:,:] = 1.
             seperator = torch.as_tensor(seperator)
-            # aug_img = np.hstack((img, seperator, detectionMap))
             aug_img = torch.cat((observation, seperator, detectionMap, seperator, miniMap), dim=2)
-            # aug_img = np.hstack((aug_img, seperator, miniMap))
-            # aug_img = torch.as_tensor(np.array([aug_img]))
             aug_list.append(aug_img)
-    else: # baseline
+
+    else: # baseline RL agent
         for stacked_img in chw_list:
             stacked_img = torch.squeeze(stacked_img)
             stacked_img = torch.tensor_split(stacked_img, 2, dim=0)
@@ -430,18 +398,9 @@ def save_video(chw_list, reward_best, step, writer, withVAE, concatAE, name, eva
             aug_img =  torch.cat((observation, seperator, miniMap), dim=2)
             aug_list.append(aug_img)
 
-    # # tchw_list = aug_list
-    # # if not withAE and not concatAE: tchw_list = chw_list # when running in normal (no AE) mode
-    # snapshot = aug_list[10].numpy()
-    # # print(snapshot.shape)
-    # snapshot = np.transpose(snapshot, (1,2,0))
-    # # print(snapshot.shape)
-    # plt.imsave("agent_snapshot.png", snapshot)
-
-    tchw_list = torch.stack(aug_list)  # Adds "list" like entry --> TCHW
+    tchw_list = torch.stack(aug_list)
     tchw_list = torch.squeeze(tchw_list)
     tchw_list = tchw_list.unsqueeze(0)
-    # print(tchw_list.size())
     name = name + str(reward_best)
     writer.add_video(
         tag=name, vid_tensor=tchw_list, global_step=step, fps=int(1/FIXED_DELTA_SECONDS),
@@ -509,11 +468,12 @@ def init_clearML(withAE, concatAE, clearmlOn):
     task.connect(parameters)
     logger = task.get_logger()
     if clearmlOn:
-        task.execute_remotely('rtx3090', clone=False, exit_process=True) 
-        # task.execute_remotely('docker', clone=False, exit_process=True) 
+        # task.execute_remotely('rtx3090', clone=False, exit_process=True) 
+        task.execute_remotely('docker', clone=False, exit_process=True) 
 
     return task
 
+# not relevant
 def conncet_to_carla(settings, port_list, current_port):
     env = None
     while env == None:

@@ -1,3 +1,8 @@
+##
+# Creates random scenarios with a goalpoint, random anomaly, spawn point... 
+# 
+##
+
 import glob
 import os
 import sys
@@ -32,7 +37,7 @@ CAM_HEIGHT = 20.5
 ROTATION = -70
 CAM_OFFSET = 18.
 ZOOM = 130
-ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/Set_2023-02-23_01:46/"
+ROOT_STORAGE_PATH = "/disk/vanishing_data/is789/scenario_samples/"
 # ROOT_STORAGE_PATH = "./scenario_sets/"
 # MAP_SET = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
 MAP_SET = ["Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt", "Town01_Opt","Town01_Opt","Town01_Opt"]
@@ -54,6 +59,7 @@ class ScenarioPlanner:
         self.world = "Town01_Opt"
 
 
+    # generates one scenario with a snapshot and json
     def generateScenario(self, env):
         env.reset()
         anomaly_id, anomaly_transform = env.spawn_anomaly_alongRoad(max_numb=30, disposition_prob=DISPOSITION_PROB, max_lateral_disposition=MAX_LATERAL_DISPOSITION)
@@ -131,12 +137,7 @@ class ScenarioPlanner:
         env.tick_world(21) # tick a whole second to despawn debug helper
         return scenario_dict, snapshot
 
-    # def createEnvironment(self):
-    #     self.env = Environment(world=self.world, port=2200, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
-    #                         cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
-    #     # self.env = Environment(host="tks-iris.fzi.de", port=2000)
-    #     self.env.init_ego()
-
+    # sample abitrary scenarios
     def sampleScenariosSet(self, amount):
         print(f"~~~~~~~~~~~~~~\n# Collecting {amount} scenarios among world: {self.world} \n~~~~~~~~~~~~~~")
         scenario_set = {}
@@ -161,8 +162,6 @@ class ScenarioPlanner:
             if not os.path.isdir(pathToSnaps):
                 os.mkdir(pathToSnaps)
             plt.imsave(pathToSnaps + f"snap_{x}.png", snapshot)
-            # snapshot = (snapshot * 255).astype("int")
-            # cv2.imwrite(pathToSnaps + f"snap_{x}.png", snapshot)
             
             # save ScenarioSettings
             if (x % 10 == 0 and not x == 0 and not x == 0):
@@ -177,9 +176,6 @@ class ScenarioPlanner:
                 env = Environment(world=self.world, port=2200, s_width=self.s_width, s_height=self.s_height, cam_height=self.cam_height, cam_rotation=self.cam_rotation,
                                 cam_zoom=self.cam_zoom, cam_x_offset=self.cam_x_offset, host=self.host, random_spawn=True)
                 env.init_ego()
-
-            # sleep a second to ensure clearing of debug_helper
-            # time.sleep(1)
         
         # save and delete last env
         self.saveScenarioSettings(timestr=timestr, amount=x+1, car_type="vehicle.tesla.model3", scenario_set=scenario_set, storagePath=storagePath, chunk_num=chunk_num)
@@ -204,6 +200,7 @@ class ScenarioPlanner:
         with open(storagePath + f"chunk{chunk_num}.json", "w") as fp:
             json.dump(final_set, fp, indent = 4)
 
+    # create a diashow of snapshots from the sceanrios
     @staticmethod
     def create_snap_video(storagePath, max_scenes=20):
             path_list = get_image_paths(storagePath + "snapshots/")
@@ -224,7 +221,8 @@ class ScenarioPlanner:
 # ==============================================================================
 # -- Check reloading scenario --------------------------------------------------
 # ==============================================================================
-
+    
+    # load and print the same scenario two times, to ensure they are the same
     @staticmethod
     def createComparison(path):
         settings = ScenarioPlanner.load_settings(path)
@@ -265,6 +263,7 @@ class ScenarioPlanner:
 
         return settings
 
+    # Creates a final json out of the chunk jsons. Run this after the whole sampling is finished
     @staticmethod
     def create_final_json(storagePath):
         path_list = get_image_paths(storagePath, filter="json")
@@ -311,5 +310,6 @@ if __name__ == "__main__":
     run_time = ((time.time() - start) / 60) / 60
     print(f"Time elapsed: {run_time} hours")
 
+    # Remember you need to run the final stacking in order to get a total json. !!!!!!!!!!!!!!!!!!!!! <----------------
     # ScenarioPlanner.create_final_json(ROOT_STORAGE_PATH)
     

@@ -1,3 +1,7 @@
+##
+# Sampling of images for Autoencoder Training
+##
+
 import glob
 import os
 import sys

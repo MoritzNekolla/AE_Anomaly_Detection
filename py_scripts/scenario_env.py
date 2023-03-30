@@ -1,3 +1,8 @@
+##
+# The environment for RL training. 
+# Creates an environment given a settings object
+# Always creates the same scenario for the same settings
+##
 import glob
 import os
 import sys
@@ -30,6 +35,8 @@ FIXED_DELTA_SECONDS = 0.1
 SUBSTEP_DELTA = 0.01
 MAX_SUBSTEPS = 10
 
+MAX_DEVIATION = 3.
+
 # ==============================================================================
 # -- Find CARLA module ---------------------------------------------------------
 # ==============================================================================
@@ -57,7 +64,7 @@ class ScenarioEnvironment:
                  cam_height=BEV_DISTANCE, cam_rotation=-90, cam_zoom=110, cam_x_offset=10.):
         weak_self = weakref.ref(self)
         self.client = carla.Client(host, port)            #Connect to server
-        self.client.set_timeout(15.0)
+        self.client.set_timeout(30.0)
 
 
         self.autoPilotOn = False
@@ -149,6 +156,7 @@ class ScenarioEnvironment:
         a_location.z += 0.3
         a_transform = carla.Transform(a_location, a_rotation)
 
+        # spawn car. Note this can sometimes fail, therefore we iteratively try to spawn the car until it works
         counter = 0
         self.vehicle = None
         spawn_worked = True
@@ -232,7 +240,7 @@ class ScenarioEnvironment:
         # Get goal distance
         goal_distance = self.goalPoint.distance(ego_transform.location)
 
-        MAX_DEVIATION = 2.
+        
         # waypoint reward
         wp_reward = 0
         tmp_goalList = []
@@ -244,7 +252,7 @@ class ScenarioEnvironment:
             else:
                 wp_reward += 1
                 self.numReachedPoints += 1
-        self.goalPointList = tmp_goalList
+        self.goalPointList = tmp_goalList.copy()
 
         # Get velocity of vehicle
         v = self.vehicle.get_velocity()
@@ -275,15 +283,10 @@ class ScenarioEnvironment:
                 min_dist = distance_ego
                 if min_dist < MAX_DEVIATION:
                     break
-        # ego_map_point = self.getEgoWaypoint()
-        # distance_ego = ego_transform.location.distance(ego_map_point.transform.location)
+
         out_of_map = 0
         if min_dist > MAX_DEVIATION:
             out_of_map = -1
-
-        # print(min_dist)
-        # reward_time = (EPISODE_TIME - run_time)/ EPISODE_TIME
-        # reward_distance = (self.settings.euc_distance - goal_distance) / self.settings.euc_distance
 
         reward_total =  10*wp_reward + 200*reward_collision + 1*out_of_map - 0.1 # + reward_time + 0.*velocity_reward
 
@@ -305,6 +308,7 @@ class ScenarioEnvironment:
         anomaly_rotation = carla.Rotation(self.settings.anomaly.spawn_point.rotation.pitch, self.settings.anomaly.spawn_point.rotation.yaw, self.settings.anomaly.spawn_point.rotation.roll)
         anomaly_transform = carla.Transform(anomaly_location, anomaly_rotation)
         
+        # spawn anomaly. Note this can sometimes fail, therefore we iteratively try to spawn the car until it works
         counter = 0
         player = None
         while player == None:
@@ -329,15 +333,9 @@ class ScenarioEnvironment:
             precipitation=self.settings.weather.precipitation,
             precipitation_deposits=self.settings.weather.precipitation_deposits,
             wind_intensity=self.settings.weather.wind_intensity,
-            # sun_azimuth_angle=self.settings.weather.sun_azimuth_angle,
             sun_altitude_angle=self.settings.weather.sun_altitude_angle,
             fog_density=self.settings.weather.fog_density,
-            # fog_distance=self.settings.weather.fog_distance,
-            # fog_falloff=self.settings.weather.fog_falloff,
             wetness=self.settings.weather.wetness
-            # scattering_intensity=self.settings.weather.scattering_intensity,
-            # mie_scattering_scale=self.settings.weather.mie_scattering_scale,
-            # rayleigh_scattering_scale=self.settings.weather.rayleigh_scattering_scale
         )
         self.world.set_weather(self.weather)
 
@@ -349,24 +347,6 @@ class ScenarioEnvironment:
             self.step(1)
         elif v <= 1.0:
             self.step(2)
-    
-    # def plotWaypoints(self):
-    #     vehicle_loc = self.vehicle.get_location()
-
-    #     self.world.debug.draw_string(vehicle_loc, str("Hallo"), draw_shadow=False, life_time=-1)
-
-    #     for w in self.map_waypoints:
-    #         # self.world.debug.draw_string(w.transform.location, 'O', draw_shadow=False,
-    #         #                                 color=carla.Color(r=255, g=0, b=0), life_time=-1,
-    #         #                                 persistent_lines=True)
-    #         # print(w.transform.location)
-    #         self.world.debug.draw_point(w.transform.location, size=0.05, life_time=-1., color=carla.Color(r=255, g=0, b=0))
-
-    #     wp = self.map.get_waypoint(vehicle_loc, project_to_road=True,
-    #             lane_type=carla.LaneType.Driving)
-        
-    #     self.world.debug.draw_point(wp.transform.location, size=0.05, life_time=-1., color=carla.Color(r=0, g=0, b=255))
-
 
     #Returns only the waypoints in one lane
     def single_lane(self, waypoint_list, lane):
@@ -478,9 +458,6 @@ class ScenarioEnvironment:
         
         p_agent = self.rotate(self.roateted_agent_spawn, p_agent, self.rotation + rotation)
         tra_rotated = self.rotate_Map(self.roateted_agent_spawn, self.rotated_trajectory_list, rotation)
-
-        # trajectory_rotated = self.rotated_trajectory_list
-        # print(trajectory_rotated)
 
         plt.style.use('dark_background')
         fig = plt.figure(figsize=(IM_WIDTH/100, IM_HEIGHT/100), dpi=100)
@@ -654,10 +631,6 @@ class ScenarioEnvironment:
         frame = frame.astype(np.float32) / 255
         frame = self.arrange_colorchannels(frame)
 
-        # seg = self.observation_seg
-        # seg = seg.astype(np.float32)
-        # seg = self.arrange_colorchannels(seg)
-        # return frame, seg
         return frame,None
 
     def __process_sensor_data(self, image):
@@ -667,14 +640,6 @@ class ScenarioEnvironment:
         i2 = i.reshape((self.s_height, self.s_width, 4))
         i3 = i2[:, :, :3]
         self.observation = i3
-
-    # def __process_sensor_data_Seg(self, image):
-    #     """ Observations directly viewable with OpenCV in CHW format """
-    #     # image.convert(carla.ColorConverter.CityScapesPalette)
-    #     i = np.array(image.raw_data)
-    #     i2 = i.reshape((self.s_height, self.s_width, 4))
-    #     i3 = i2[:, :, :3]
-    #     self.observation_seg = i3
 
     def __process_collision_data(self, event):
         self.collision_hist.append(event)
@@ -700,8 +665,6 @@ class ScenarioEnvironment:
         for actor in self.actor_list:
             if not actor == None:
                 actor.destroy()   
- 
-        # self.client.apply_batch([carla.command.DestroyActor(x) for x in self.actor_list])
 
     def __del__(self):
         print("__del__ called")

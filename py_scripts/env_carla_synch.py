@@ -1,4 +1,8 @@
 
+##
+# A snyched environment for sampling of the scenarios
+##
+
 import glob
 import os
 import sys
@@ -29,24 +33,6 @@ EPISODE_TIME = 30
 FIXED_DELTA_SECONDS = 0.05
 SUBSTE_DELTA = 0.007
 MAX_SUBSTEPS = 10
-# # ==============================================================================
-# # -- Find CARLA module ---------------------------------------------------------
-# # ==============================================================================
-# try:
-#     sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
-#         sys.version_info.major,
-#         sys.version_info.minor,
-#         'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
-# except IndexError:
-#     pass
-
-# # ==============================================================================
-# # -- Add PythonAPI for release mode --------------------------------------------
-# # ==============================================================================
-# try:
-#     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + '/carla')
-# except IndexError:
-#     pass
 
 import carla
 
@@ -58,14 +44,8 @@ class Environment:
         self.client = carla.Client(host, port)            #Connect to server
         self.client.set_timeout(30.0)
 
-        # traffic_manager = self.client.get_trafficmanager(port)
-        # traffic_manager.set_global_distance_to_leading_vehicle(2.5)
-        # traffic_manager.set_respawn_dormant_vehicles(True)
-        # traffic_manager.set_synchronous_mode(True)
 
         self.autoPilotOn = False
-        # self.tm = self.client.get_trafficmanager()
-        # self.tm_port = self.tm.get_port()
         self.random_spawn = random_spawn
 
         if not world == None: self.world = self.client.load_world(world)
@@ -79,8 +59,6 @@ class Environment:
         self.spawn_point = None
         self.trajectory_list = None
 
-        # for sp in self.spawn_points:
-        #     print(sp)
         self.s_width = s_width
         self.s_height = s_height
         self.cam_height = cam_height
@@ -111,7 +89,7 @@ class Environment:
         w_settings.substepping = True
         w_settings.max_substep_delta_time = SUBSTE_DELTA
         w_settings.max_substeps = MAX_SUBSTEPS
-        # self.tm.set_synchronous_mode(True)
+
         self.world.apply_settings(w_settings)
         self.fps_counter = 0
         self.max_fps = int(1/FIXED_DELTA_SECONDS) * EPISODE_TIME
@@ -133,10 +111,6 @@ class Environment:
         self.ss_cam_rotation = carla.Rotation(self.cam_rotation,0,0)
         self.ss_cam_transform = carla.Transform(self.ss_cam_location, self.ss_cam_rotation)
 
-        # # Configure segmantic sensors
-        # self.ss_camera_bp_sg.set_attribute('image_size_x', f'{self.s_width}')
-        # self.ss_camera_bp_sg.set_attribute('image_size_y', f'{self.s_height}')
-        # self.ss_camera_bp_sg.set_attribute('fov', str(self.cam_zoom))
         
         # collision sensor
         self.col_sensor_location = carla.Location(0,0,0)
